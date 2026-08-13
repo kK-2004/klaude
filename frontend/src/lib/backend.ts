@@ -28,4 +28,6 @@ export const backend = {
   turnChanges: (turnId: string) => call<FileChange[]>('GetTurnChanges', turnId),
   undoTurn: (turnId: string) => call<void>('UndoTurn', turnId),
   resolveApproval: (resolution: ApprovalResolution) => call<void>('ResolveApproval', resolution),
+  settings: () => call<{ Agent?: { ParallelTools?: boolean; LLMSchedule?: boolean; MaxTurns?: number; ContextBudgetChars?: number; Model?: string }; Provider?: { Endpoint?: string; Model?: string; CredentialEnv?: string } }>('Settings'),
+  updateSettings: (update: { parallelTools: boolean; llmSchedule: boolean }) => call<unknown>('UpdateSettings', update),
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 
 	agentcontext "github.com/klaude/klaude/internal/context"
@@ -31,12 +32,15 @@ func (p *fakeProvider) Stream(_ context.Context, _ model.Request) (<-chan model.
 }
 
 type fakeDispatcher struct {
+	mu     sync.Mutex
 	calls  []ToolCall
 	result ToolResult
 }
 
 func (d *fakeDispatcher) Dispatch(_ context.Context, call ToolCall) (ToolResult, error) {
+	d.mu.Lock()
 	d.calls = append(d.calls, call)
+	d.mu.Unlock()
 	return d.result, nil
 }
 
@@ -129,6 +133,30 @@ func TestRunReadBatchExecutesConcurrentCalls(t *testing.T) {
 	results := RunReadBatch(context.Background(), dispatcher, []BatchCall{{Call: ToolCall{ID: "1"}, Concurrent: true}, {Call: ToolCall{ID: "2"}, Concurrent: true}})
 	if len(results) != 2 || len(dispatcher.calls) != 2 {
 		t.Fatalf("results=%+v calls=%+v", results, dispatcher.calls)
+	}
+}
+
+func TestAgentParallelToolsDispatchesBatch(t *testing.T) {
+	callArgs := json.RawMessage(`{"path":"a.go"}`)
+	callArgs2 := json.RawMessage(`{"path":"b.go"}`)
+	provider := &fakeProvider{streams: [][]model.Event{
+		{
+			{Type: model.ToolCallStart, ID: "1", Name: "read_file"}, {Type: model.ToolCallEnd, ID: "1", Arguments: callArgs},
+			{Type: model.ToolCallStart, ID: "2", Name: "read_file"}, {Type: model.ToolCallEnd, ID: "2", Arguments: callArgs2},
+			{Type: model.ModelCompleted},
+		},
+		{{Type: model.TextDelta, Text: "done"}, {Type: model.ModelCompleted}},
+	}}
+	dispatcher := &fakeDispatcher{result: ToolResult{Content: "ok", Success: true}}
+	agent := Agent{
+		Provider: provider, Context: agentcontext.Manager{BudgetChars: 1000}, Dispatcher: dispatcher, Events: event.NewBus(),
+		SessionID: "s", TurnID: "t", ScheduleCfg: SchedulerConfig{ParallelTools: true},
+	}
+	if err := agent.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(dispatcher.calls) != 2 {
+		t.Fatalf("calls = %+v", dispatcher.calls)
 	}
 }
 

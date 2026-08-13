@@ -40,6 +40,20 @@ export namespace app {
 	        this.requestHash = source["requestHash"];
 	    }
 	}
+	export class SettingsUpdate {
+	    parallelTools: boolean;
+	    llmSchedule: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SettingsUpdate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.parallelTools = source["parallelTools"];
+	        this.llmSchedule = source["llmSchedule"];
+	    }
+	}
 	export class MessageDTO {
 	    id: string;
 	    sessionId: string;
@@ -203,6 +217,8 @@ export namespace config {
 	    ContextBudgetChars: number;
 	    ToolResultChars: number;
 	    ShellTimeoutSec: number;
+	    ParallelTools: boolean;
+	    LLMSchedule: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentConfig(source);
@@ -214,6 +230,8 @@ export namespace config {
 	        this.ContextBudgetChars = source["ContextBudgetChars"];
 	        this.ToolResultChars = source["ToolResultChars"];
 	        this.ShellTimeoutSec = source["ShellTimeoutSec"];
+	        this.ParallelTools = source["ParallelTools"];
+	        this.LLMSchedule = source["LLMSchedule"];
 	    }
 	}
 	export class PermissionConfig {

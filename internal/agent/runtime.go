@@ -49,19 +49,22 @@ const (
 )
 
 type Agent struct {
-	Provider   model.Provider
-	Context    agentcontext.Manager
-	Dispatcher Dispatcher
-	Events     *event.Bus
-	Store      Store
-	SessionID  string
-	TurnID     string
-	ProjectID  string
-	MaxTurns   int
-	Messages   []model.Message
-	Mutating   bool
-	Locks      *MutationLocks
-	mu         sync.Mutex
+	Provider    model.Provider
+	Context     agentcontext.Manager
+	Dispatcher  Dispatcher
+	Events      *event.Bus
+	Store       Store
+	SessionID   string
+	TurnID      string
+	ProjectID   string
+	MaxTurns    int
+	Messages    []model.Message
+	Mutating    bool
+	Locks       *MutationLocks
+	ScheduleCfg SchedulerConfig
+	ToolMeta    ToolMetaLookup
+	Planner     SchedulePlanner
+	mu          sync.Mutex
 }
 
 // Run 执行一次 Agent turn 的主循环：
@@ -141,19 +144,27 @@ func (a *Agent) Run(ctx context.Context) error {
 		if len(calls) == 0 {
 			return a.fail(ctx, "incomplete_model_response", errors.New("model stream ended without completion"))
 		}
+		if a.Dispatcher == nil {
+			return a.fail(ctx, "tool_unavailable", errors.New("agent: tool dispatcher is not configured"))
+		}
+		planner := a.Planner
+		if planner == nil && a.ScheduleCfg.ParallelTools && a.ScheduleCfg.LLMSchedule {
+			planner = ProviderSchedulePlanner{Provider: a.Provider}
+		}
+		plan := PlanToolBatch(ctx, calls, a.ToolMeta, a.ScheduleCfg, planner)
 		for _, call := range calls {
 			if err := a.Events.Publish(ctx, a.SessionID, a.TurnID, event.ToolStarted, map[string]string{"id": call.ID, "name": call.Name}); err != nil {
 				return err
 			}
-			if a.Dispatcher == nil {
-				return a.fail(ctx, "tool_unavailable", errors.New("agent: tool dispatcher is not configured"))
-			}
-			result, dispatchErr := a.Dispatcher.Dispatch(ctx, call)
+		}
+		batch := ExecuteLayers(ctx, a.Dispatcher, calls, plan)
+		for _, item := range batch {
+			result, dispatchErr := item.Result, item.Err
 			if dispatchErr != nil && result.ErrorCode == "" {
 				result.ErrorCode = "tool_error"
 			}
 			if a.Store != nil {
-				if err := a.Store.AppendTool(ctx, call, result); err != nil {
+				if err := a.Store.AppendTool(ctx, item.Call, result); err != nil {
 					return a.fail(ctx, "storage_error", err)
 				}
 			}
@@ -161,9 +172,7 @@ func (a *Agent) Run(ctx context.Context) error {
 				return err
 			}
 			// 工具错误也写入对话上下文，让模型在下一轮自行纠错/换策略。
-			a.Messages = append(a.Messages, model.Message{Role: model.RoleTool, Content: result.Content, ToolCallID: call.ID, Name: call.Name})
-			if dispatchErr != nil { /* operational errors go back into context */
-			}
+			a.Messages = append(a.Messages, model.Message{Role: model.RoleTool, Content: result.Content, ToolCallID: item.Call.ID, Name: item.Call.Name})
 		}
 	}
 	return a.fail(ctx, "max_turns", errors.New("agent: maximum turns reached"))

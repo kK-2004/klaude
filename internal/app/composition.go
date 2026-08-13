@@ -50,7 +50,7 @@ func Build(ctx context.Context, dirs storage.DataDirs, logger *slog.Logger) (*Co
 			return nil, err
 		}
 	}
-	loaded := config.Load("", "")
+	loaded := config.Load(config.UserConfigPath(dirs.Base), "")
 	composition := &Composition{Data: dirs, DB: db, Config: loaded, Events: event.NewBus(), Approvals: approval.NewManager(), Permissions: permission.NewDefault(), Executor: executor.Local{}, Projects: project.NewManager(db), Sessions: session.NewManager(db), Tools: tool.NewRegistry(), Context: agentcontext.Manager{SystemInstructions: "You are Klaude, a careful coding agent.", BudgetChars: loaded.Config.Agent.ContextBudgetChars, ToolResultChars: loaded.Config.Agent.ToolResultChars}, Logger: logger}
 	tracePath := dirs.Traces + "/startup.jsonl"
 	if writer, traceErr := trace.Open(tracePath, 10*1024*1024); traceErr == nil {

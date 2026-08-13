@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -24,10 +23,12 @@ type UIConfig struct {
 }
 
 type AgentConfig struct {
-	MaxTurns           int `toml:"max_turns"`
-	ContextBudgetChars int `toml:"context_budget_chars"`
-	ToolResultChars    int `toml:"tool_result_chars"`
-	ShellTimeoutSec    int `toml:"shell_timeout_sec"`
+	MaxTurns           int  `toml:"max_turns"`
+	ContextBudgetChars int  `toml:"context_budget_chars"`
+	ToolResultChars    int  `toml:"tool_result_chars"`
+	ShellTimeoutSec    int  `toml:"shell_timeout_sec"`
+	ParallelTools      bool `toml:"parallel_tools"`
+	LLMSchedule        bool `toml:"llm_schedule"`
 }
 
 type ProviderConfig struct {
@@ -115,7 +116,7 @@ func (r *LoadResult) loadFile(path string, project bool) {
 		r.Warnings = append(r.Warnings, fmt.Errorf("invalid config %s: %w", path, err))
 		return
 	}
-	merge(&r.Config, patch, project)
+	merge(&r.Config, patch, project, metadata)
 	r.Sources = append(r.Sources, path)
 }
 
@@ -173,7 +174,7 @@ func ResolveCredential(ref string) (string, error) {
 	return value, nil
 }
 
-func merge(dst *Config, patch Config, project bool) {
+func merge(dst *Config, patch Config, project bool, meta toml.MetaData) {
 	if patch.DefaultModel != "" {
 		dst.DefaultModel = patch.DefaultModel
 	}
@@ -191,6 +192,12 @@ func merge(dst *Config, patch Config, project bool) {
 	}
 	if patch.Agent.ShellTimeoutSec != 0 {
 		dst.Agent.ShellTimeoutSec = patch.Agent.ShellTimeoutSec
+	}
+	if meta.IsDefined("agent", "parallel_tools") {
+		dst.Agent.ParallelTools = patch.Agent.ParallelTools
+	}
+	if meta.IsDefined("agent", "llm_schedule") {
+		dst.Agent.LLMSchedule = patch.Agent.LLMSchedule
 	}
 	if patch.Provider.Name != "" {
 		dst.Provider.Name = patch.Provider.Name
@@ -235,4 +242,24 @@ func joinKeys(keys []toml.Key) string {
 	return strings.Join(parts, ", ")
 }
 
-func (r LoadResult) LoadedAt() time.Time { return time.Now().UTC() }
+func UserConfigPath(dataBase string) string {
+	return filepath.Join(dataBase, "config.toml")
+}
+
+// Save writes the full config as TOML (0600). Used for user-level preference persistence.
+func Save(path string, cfg Config) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("config path is empty")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	encoder := toml.NewEncoder(file)
+	encoder.Indent = ""
+	return encoder.Encode(cfg)
+}

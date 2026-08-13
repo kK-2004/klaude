@@ -38,6 +38,11 @@ export type AppController = {
   setContextLimit: (value: string) => void
   turnLimit: string
   setTurnLimit: (value: string) => void
+  parallelTools: boolean
+  setParallelTools: (value: boolean) => void
+  llmSchedule: boolean
+  setLLMSchedule: (value: boolean) => void
+  saveSettings: () => Promise<void>
   turnStatus: string
   usage: { input?: number; output?: number }
   project?: Project

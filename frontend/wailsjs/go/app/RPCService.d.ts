@@ -44,4 +44,6 @@ export function SelectDirectory(arg1:string):Promise<string>;
 
 export function Settings():Promise<config.Config>;
 
+export function UpdateSettings(arg1:app.SettingsUpdate):Promise<config.Config>;
+
 export function UndoTurn(arg1:string):Promise<void>;

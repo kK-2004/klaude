@@ -21,6 +21,8 @@ export function useAppController(): AppController {
   const [credentialEnv, setCredentialEnv] = useState('OPENAI_API_KEY')
   const [contextLimit, setContextLimit] = useState('120000')
   const [turnLimit, setTurnLimit] = useState('50')
+  const [parallelTools, setParallelTools] = useState(false)
+  const [llmSchedule, setLLMSchedule] = useState(false)
   const [turnStatus, setTurnStatus] = useState('idle')
   const [usage, setUsage] = useState<{ input?: number; output?: number }>({})
 
@@ -53,7 +55,14 @@ export function useAppController(): AppController {
         setDiagnostic('应用以只读诊断模式启动。')
         return
       }
-      const [recentProjects, caps] = await Promise.all([backend.listProjects(), backend.capabilities()])
+      const [recentProjects, caps, settings] = await Promise.all([backend.listProjects(), backend.capabilities(), backend.settings().catch(() => undefined)])
+      if (settings?.Provider?.Endpoint) setEndpoint(settings.Provider.Endpoint)
+      if (settings?.Provider?.Model) setModel(settings.Provider.Model)
+      if (settings?.Provider?.CredentialEnv) setCredentialEnv(settings.Provider.CredentialEnv)
+      if (settings?.Agent?.ContextBudgetChars) setContextLimit(String(settings.Agent.ContextBudgetChars))
+      if (settings?.Agent?.MaxTurns) setTurnLimit(String(settings.Agent.MaxTurns))
+      setParallelTools(Boolean(settings?.Agent?.ParallelTools))
+      setLLMSchedule(Boolean(settings?.Agent?.LLMSchedule))
       setProjects(recentProjects)
       setCapabilities(caps)
       const selected = recentProjects[0]
@@ -263,6 +272,30 @@ export function useAppController(): AppController {
     }
   }, [changes, selectedChange])
 
+  const toggleParallelTools = useCallback((value: boolean) => {
+    setParallelTools(value)
+    if (!value) setLLMSchedule(false)
+  }, [])
+
+  const saveSettings = useCallback(async () => {
+    try {
+      const saved = await backend.updateSettings({
+        parallelTools,
+        llmSchedule: parallelTools && llmSchedule,
+      }) as { Agent?: { ParallelTools?: boolean; LLMSchedule?: boolean } } | undefined
+      setParallelTools(Boolean(saved?.Agent?.ParallelTools ?? parallelTools))
+      setLLMSchedule(Boolean(saved?.Agent?.LLMSchedule ?? (parallelTools && llmSchedule)))
+      setPage('home')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('unavailable') || message.includes('Wails')) {
+        setPage('home')
+        return
+      }
+      setDiagnostic(message)
+    }
+  }, [llmSchedule, parallelTools])
+
   const groupedChanges = useMemo(
     () => changes.reduce<Record<string, FileChange[]>>((groups, change) => {
       (groups[change.turnId] ??= []).push(change)
@@ -306,6 +339,11 @@ export function useAppController(): AppController {
     setContextLimit,
     turnLimit,
     setTurnLimit,
+    parallelTools,
+    setParallelTools: toggleParallelTools,
+    llmSchedule,
+    setLLMSchedule,
+    saveSettings,
     turnStatus,
     usage,
     project,

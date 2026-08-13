@@ -166,6 +166,10 @@ func (r *RPCService) ResolveApproval(request ApprovalResolution) error {
 
 func (r *RPCService) Settings() config.Config { return r.service.Settings() }
 
+func (r *RPCService) UpdateSettings(update SettingsUpdate) (config.Config, error) {
+	return r.service.UpdateSettings(context.Background(), update)
+}
+
 func mapProject(project storage.Project) ProjectDTO {
 	return ProjectDTO{ID: project.ID, Name: project.Name, RootPath: project.RootPath, GitRoot: project.GitRoot, CreatedAt: formatTime(project.CreatedAt), UpdatedAt: formatTime(project.UpdatedAt)}
 }

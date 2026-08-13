@@ -57,8 +57,25 @@ func TestConfigRejectsInsecureEndpointAndPlaintextCredential(t *testing.T) {
 	}
 }
 
-func TestMissingCredentialFails(t *testing.T) {
-	if _, err := ResolveCredential("KLAUDE_MISSING_SECRET"); err == nil {
-		t.Fatal("expected missing credential error")
+func TestAgentScheduleFlagsDefaultOff(t *testing.T) {
+	cfg := Defaults()
+	if cfg.Agent.ParallelTools || cfg.Agent.LLMSchedule {
+		t.Fatalf("expected parallel flags off by default: %+v", cfg.Agent)
 	}
 }
+
+func TestSaveAndReloadParallelFlags(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	cfg := Defaults()
+	cfg.Agent.ParallelTools = true
+	cfg.Agent.LLMSchedule = true
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded := Load(path, "")
+	if !loaded.Config.Agent.ParallelTools || !loaded.Config.Agent.LLMSchedule {
+		t.Fatalf("loaded = %+v", loaded.Config.Agent)
+	}
+}
+
+

@@ -158,8 +158,12 @@ func runRG(ctx context.Context, cfg BuiltinContext, pattern string, path string,
 	return LimitResult(Result{Content: string(output), Success: true, Metadata: map[string]any{"command": "rg"}}, cfg.MaxOutput), nil
 }
 
-func objectSchema(properties map[string]any, required string) map[string]any {
-	return map[string]any{"type": "object", "properties": properties, "required": []any{required}}
+func objectSchema(properties map[string]any, required ...string) map[string]any {
+	req := make([]any, 0, len(required))
+	for _, name := range required {
+		req = append(req, name)
+	}
+	return map[string]any{"type": "object", "properties": properties, "required": req}
 }
 func bytesContainZero(data []byte) bool {
 	for _, value := range data {

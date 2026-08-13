@@ -78,6 +78,10 @@ export function Settings() {
   return window['go']['app']['RPCService']['Settings']();
 }
 
+export function UpdateSettings(arg1) {
+  return window['go']['app']['RPCService']['UpdateSettings'](arg1);
+}
+
 export function UndoTurn(arg1) {
   return window['go']['app']['RPCService']['UndoTurn'](arg1);
 }

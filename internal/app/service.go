@@ -147,6 +147,33 @@ func (s *Service) RenameSession(ctx context.Context, sessionID, title string) er
 
 func (s *Service) Settings() config.Config { return s.config.Config }
 
+// SettingsUpdate is the desktop settings patch persisted to the user config.toml.
+type SettingsUpdate struct {
+	ParallelTools bool `json:"parallelTools"`
+	LLMSchedule   bool `json:"llmSchedule"`
+}
+
+// UpdateSettings applies agent concurrency flags and writes the user config file.
+func (s *Service) UpdateSettings(_ context.Context, update SettingsUpdate) (config.Config, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg := s.config.Config
+	cfg.Agent.ParallelTools = update.ParallelTools
+	cfg.Agent.LLMSchedule = update.LLMSchedule && update.ParallelTools
+	path := config.UserConfigPath(s.data.Base)
+	if path == "" || s.data.Base == "" {
+		return config.Config{}, errors.New("user config path is unavailable")
+	}
+	if err := config.Save(path, cfg); err != nil {
+		return config.Config{}, err
+	}
+	s.config.Config = cfg
+	if s.composition != nil {
+		s.composition.Config.Config = cfg
+	}
+	return cfg, nil
+}
+
 // ConversationSnapshot 是桌面端断线重连用的只读快照：仅含已持久化数据，
 // 事件序列出现空洞时可用它重新对齐 UI 状态。
 type ConversationSnapshot struct {
