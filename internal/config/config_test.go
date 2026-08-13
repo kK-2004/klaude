@@ -1,0 +1,64 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestLayeredConfigAndInstructions(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	if err := os.MkdirAll(filepath.Join(project, ".klaude"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	user := filepath.Join(root, "config.toml")
+	if err := os.WriteFile(user, []byte("default_model = \"openai:user\"\n[provider]\nmodel = \"user-model\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".klaude", "config.toml"), []byte("[provider]\nmodel = \"project-model\"\n[permissions]\nwrite = \"allow\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".klaude", "instructions.md"), []byte("Project rules"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result := Load(user, project)
+	if result.Config.Provider.Model != "project-model" {
+		t.Fatalf("model = %q", result.Config.Provider.Model)
+	}
+	if result.Config.Permissions.Write != "ask" {
+		t.Fatalf("project config weakened permissions: %q", result.Config.Permissions.Write)
+	}
+	if len(result.Instructions) != 1 || result.Instructions[0].Content != "Project rules" {
+		t.Fatalf("instructions = %+v", result.Instructions)
+	}
+	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0].Error(), "cannot override permissions") {
+		t.Fatalf("warnings = %+v", result.Warnings)
+	}
+}
+
+func TestConfigRejectsInsecureEndpointAndPlaintextCredential(t *testing.T) {
+	cfg := Defaults()
+	cfg.Provider.Endpoint = "http://example.com"
+	if err := Validate(cfg, false); err == nil {
+		t.Fatal("expected insecure endpoint error")
+	}
+	if err := Validate(cfg, true); err == nil {
+		t.Fatal("expected project endpoint error")
+	}
+	if err := os.Setenv("KLAUDE_TEST_SECRET", "secret"); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Unsetenv("KLAUDE_TEST_SECRET")
+	got, err := ResolveCredential("KLAUDE_TEST_SECRET")
+	if err != nil || got != "secret" {
+		t.Fatalf("credential = %q, err=%v", got, err)
+	}
+}
+
+func TestMissingCredentialFails(t *testing.T) {
+	if _, err := ResolveCredential("KLAUDE_MISSING_SECRET"); err == nil {
+		t.Fatal("expected missing credential error")
+	}
+}
