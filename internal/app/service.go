@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -106,13 +107,14 @@ func (s *Service) Shutdown(_ context.Context) {
 func (s *Service) Health() HealthResponse {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return HealthResponse{Ready: s.ready, Product: "Klaude", Version: "0.1.0"}
+	return HealthResponse{Ready: s.ready, Product: "Klaude", Version: "0.1.0", Platform: runtime.GOOS}
 }
 
 type HealthResponse struct {
-	Ready   bool   `json:"ready"`
-	Product string `json:"product"`
-	Version string `json:"version"`
+	Ready    bool   `json:"ready"`
+	Product  string `json:"product"`
+	Version  string `json:"version"`
+	Platform string `json:"platform"`
 }
 
 func (s *Service) OpenProject(ctx context.Context, path string) (storage.Project, error) {
@@ -127,6 +129,74 @@ func (s *Service) ListProjects(ctx context.Context) ([]storage.Project, error) {
 		return nil, errors.New("application is not initialized")
 	}
 	return s.db.ListProjects(ctx)
+}
+
+func (s *Service) RenameProject(ctx context.Context, projectID, name string) (storage.Project, error) {
+	if s.db == nil {
+		return storage.Project{}, errors.New("application is not initialized")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return storage.Project{}, errors.New("project name is required")
+	}
+	if len([]rune(name)) > 120 {
+		return storage.Project{}, errors.New("project name is too long")
+	}
+	if err := s.db.RenameProject(ctx, projectID, name); err != nil {
+		return storage.Project{}, err
+	}
+	return s.db.GetProject(ctx, projectID)
+}
+
+func (s *Service) SetProjectPinned(ctx context.Context, projectID string, pinned bool) (storage.Project, error) {
+	if s.db == nil {
+		return storage.Project{}, errors.New("application is not initialized")
+	}
+	if err := s.db.SetProjectPinned(ctx, projectID, pinned); err != nil {
+		return storage.Project{}, err
+	}
+	return s.db.GetProject(ctx, projectID)
+}
+
+// DeleteProject 先取消该项目下仍在运行的 Agent，再删除项目及级联的会话历史。
+func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
+	if s.db == nil || s.sessions == nil {
+		return errors.New("application is not initialized")
+	}
+	sessions, err := s.sessions.List(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	for _, item := range sessions {
+		s.sessions.Cancel(item.ID)
+	}
+	return s.db.DeleteProject(ctx, projectID)
+}
+
+// RevealProject 只接受已登记的项目 ID，避免前端传入任意路径触发系统命令。
+func (s *Service) RevealProject(ctx context.Context, projectID string) error {
+	if s.db == nil {
+		return errors.New("application is not initialized")
+	}
+	stored, err := s.db.GetProject(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	return project.Reveal(ctx, stored.RootPath)
+}
+
+// MoveSession 把草稿会话改挂到另一个项目，让重选项目沿用当前对话而不是新建。
+func (s *Service) MoveSession(ctx context.Context, sessionID, projectID string) (storage.Session, error) {
+	if s.db == nil {
+		return storage.Session{}, errors.New("application is not initialized")
+	}
+	if _, err := s.db.GetProject(ctx, projectID); err != nil {
+		return storage.Session{}, err
+	}
+	if err := s.db.MoveSession(ctx, sessionID, projectID); err != nil {
+		return storage.Session{}, err
+	}
+	return s.db.GetSession(ctx, sessionID)
 }
 
 func (s *Service) CreateSession(ctx context.Context, projectID, title, providerName, modelName string) (storage.Session, error) {

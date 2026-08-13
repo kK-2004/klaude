@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { backend } from '../lib/backend'
-import { demoFiles, demoSession } from '../lib/demo'
 import { useAgentStore } from '../stores/agent'
 import { useThemeStore } from '../stores/theme'
 import { useWorkspaceStore } from '../stores/workspace'
 import type { AgentEvent, FileChange, Project, Session } from '../types/backend'
 import type { AppController, AppPage, AppState, PendingApproval } from './types'
-import type { ApprovalMode, BackendSettings, ModelCatalog, ModelConnectionResult, ModelProfileInput, SettingsUpdate } from '../lib/backend'
+import type { ApprovalMode, BackendSettings, ModelCatalog, ModelConnectionResult, ModelProfileInput, Platform, SettingsUpdate } from '../lib/backend'
 
 const previewModelCatalog: ModelCatalog = {
   activeId: 'preview-openai',
@@ -14,6 +13,30 @@ const previewModelCatalog: ModelCatalog = {
     { id: 'preview-openai', name: 'GPT-5.6-Sol', providerSpec: 'openai', apiMode: 'responses', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.6-sol', contextWindow: 400000, maxOutputTokens: 32768, temperature: 0.2, hasApiKey: false },
     { id: 'preview-anthropic', name: 'Claude Sonnet', providerSpec: 'anthropic', apiMode: 'messages', baseUrl: 'https://api.anthropic.com/v1', model: 'claude-sonnet', contextWindow: 200000, maxOutputTokens: 16384, temperature: 0.2, hasApiKey: false },
   ],
+}
+
+function isBackendUnavailable(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('unavailable') || message.includes('Wails')
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function detectPlatform(): Platform {
+  const agent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  if (agent.includes('Win')) return 'windows'
+  if (agent.includes('Linux') && !agent.includes('Android')) return 'linux'
+  return 'darwin'
+}
+
+// 与后端 ListProjects 的排序保持一致：置顶优先，其余按最近使用。
+function sortProjects(projects: Project[]): Project[] {
+  return [...projects].sort((left, right) => {
+    if (Boolean(left.pinned) !== Boolean(right.pinned)) return left.pinned ? -1 : 1
+    return right.updatedAt.localeCompare(left.updatedAt)
+  })
 }
 
 function approvalModeFromSettings(settings?: BackendSettings): ApprovalMode {
@@ -44,6 +67,7 @@ export function useAppController(): AppController {
   const [approvalMode, setApprovalMode] = useState<ApprovalMode>('ask')
   const [turnStatus, setTurnStatus] = useState('idle')
   const [usage, setUsage] = useState<{ input?: number; output?: number }>({})
+  const [platform, setPlatform] = useState<Platform>(detectPlatform)
 
   const project = useWorkspaceStore((state) => state.project)
   const projects = useWorkspaceStore((state) => state.projects)
@@ -69,6 +93,7 @@ export function useAppController(): AppController {
     setDiagnostic('')
     try {
       const health = await backend.health()
+      if (health.platform) setPlatform(health.platform)
       if (!health.ready) {
         setAppState('diagnostic')
         setDiagnostic('应用以只读诊断模式启动。')
@@ -103,18 +128,30 @@ export function useAppController(): AppController {
           setSession(selectedSession)
           const snapshot = await backend.loadConversation(selectedSession.id)
           setMessages(snapshot.messages)
+        } else {
+          setSession(undefined)
+          setMessages([])
         }
         setFiles(await backend.browseProject(selected.rootPath, '.'))
+      } else {
+        setProject(undefined)
+        setSessions([])
+        setSession(undefined)
+        setMessages([])
+        setFiles([])
       }
       setAppState('ready')
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.includes('unavailable') || message.includes('Wails')) {
+      const message = errorMessage(error)
+      if (isBackendUnavailable(error)) {
         setModelCatalog(previewModelCatalog)
         setModel(previewModelCatalog.profiles[0].model)
-        setSession(demoSession)
-        setSessions([demoSession])
-        setFiles(demoFiles)
+        setProject(undefined)
+        setProjects([])
+        setSession(undefined)
+        setSessions([])
+        setMessages([])
+        setFiles([])
         setAppState('ready')
         setDiagnostic('预览模式：请通过 Wails 启动桌面应用以连接后端。')
       } else {
@@ -148,43 +185,147 @@ export function useAppController(): AppController {
     void backend.loadConversation(session.id).then((snapshot) => setMessages(snapshot.messages)).catch(() => undefined)
   }, [needsSnapshot, session, setMessages])
 
-  const selectProject = useCallback(async (item: Project) => {
+  // loadProjectWorkspace 是切换项目的唯一入口：同时刷新文件树、会话列表与会话内容。
+  // session 用于重选项目后停留在同一个会话；keepDraft 保持「新对话」状态，不自动打开旧会话。
+  const loadProjectWorkspace = useCallback(async (item: Project, options: { session?: Session; keepDraft?: boolean } = {}) => {
     setProject(item)
     setPage('home')
+    const [entries, recentSessions] = await Promise.all([
+      backend.browseProject(item.rootPath, '.').catch(() => []),
+      backend.listSessions(item.id).catch(() => []),
+    ])
+    setFiles(entries)
+    setSessions(recentSessions)
+    const preferred = options.session
+    const next = preferred
+      ? recentSessions.find((entry) => entry.id === preferred.id) ?? preferred
+      : options.keepDraft ? undefined : recentSessions[0]
+    setSession(next)
+    if (!next) {
+      setMessages([])
+      return
+    }
     try {
-      setFiles(await backend.browseProject(item.rootPath, '.'))
-      const recentSessions = await backend.listSessions(item.id)
-      setSessions(recentSessions)
-      const next = recentSessions[0]
-      setSession(next)
-      if (next) {
-        setMessages((await backend.loadConversation(next.id)).messages)
-      } else {
-        setMessages([])
-      }
+      setMessages((await backend.loadConversation(next.id)).messages)
     } catch {
-      setFiles(demoFiles)
+      setMessages([])
     }
   }, [setFiles, setMessages, setProject, setSession, setSessions])
 
+  const closeProject = useCallback(() => {
+    setProject(undefined)
+    setSessions([])
+    setSession(undefined)
+    setMessages([])
+    setFiles([])
+    setChanges([])
+    setSelectedChange(undefined)
+    setPage('home')
+  }, [setFiles, setMessages, setProject, setSession, setSessions])
+
+  const selectProject = useCallback(async (item: Project) => {
+    await loadProjectWorkspace(item)
+  }, [loadProjectWorkspace])
+
+  const pickProjectDirectory = useCallback(async () => {
+    const path = await backend.selectDirectory(project?.rootPath ?? '')
+    if (!path) return undefined
+    const opened = await backend.openProject(path)
+    setProjects(sortProjects([opened, ...projects.filter((item) => item.rootPath !== opened.rootPath)]))
+    return opened
+  }, [project?.rootPath, projects, setProjects])
+
   const openProject = useCallback(async () => {
     try {
-      const path = await backend.selectDirectory(project?.rootPath ?? '')
-      if (!path) return
-      const opened = await backend.openProject(path)
-      setProject(opened)
-      setProjects([opened, ...projects.filter((item) => item.rootPath !== opened.rootPath)])
-      setFiles(await backend.browseProject(opened.rootPath, '.'))
-      const recentSessions = await backend.listSessions(opened.id)
-      setSessions(recentSessions)
-      setSession(recentSessions[0])
-      setPage('home')
+      const opened = await pickProjectDirectory()
+      if (!opened) return
+      await loadProjectWorkspace(opened)
       setAppState('ready')
     } catch (error) {
-      setDiagnostic(error instanceof Error ? error.message : String(error))
-      setAppState('diagnostic')
+      setDiagnostic(errorMessage(error))
     }
-  }, [project?.rootPath, projects, setFiles, setProject, setProjects, setSession, setSessions])
+  }, [loadProjectWorkspace, pickProjectDirectory])
+
+  // 输入框上的项目胶囊：草稿对话重选目录时改挂当前会话，避免跳到另一个项目的旧会话。
+  const chooseProjectForSession = useCallback(async () => {
+    try {
+      const opened = await pickProjectDirectory()
+      if (!opened) return
+      const draft = session && messages.length === 0 ? session : undefined
+      if (draft) {
+        const moved = draft.projectId === opened.id ? draft : await backend.moveSession(draft.id, opened.id)
+        await loadProjectWorkspace(opened, { session: moved })
+      } else {
+        await loadProjectWorkspace(opened, { keepDraft: true })
+      }
+      setAppState('ready')
+    } catch (error) {
+      setDiagnostic(errorMessage(error))
+    }
+  }, [loadProjectWorkspace, messages.length, pickProjectDirectory, session])
+
+  const refreshProjects = useCallback(async (fallback: Project[]) => {
+    try {
+      setProjects(await backend.listProjects())
+    } catch {
+      setProjects(sortProjects(fallback))
+    }
+  }, [setProjects])
+
+  const renameProject = useCallback(async (item: Project) => {
+    const name = window.prompt('重命名项目', item.name)?.trim()
+    if (!name || name === item.name) return
+    try {
+      await backend.renameProject(item.id, name)
+    } catch (error) {
+      if (!isBackendUnavailable(error)) {
+        setDiagnostic(errorMessage(error))
+        return
+      }
+    }
+    const renamed = { ...item, name }
+    await refreshProjects(projects.map((entry) => entry.id === item.id ? renamed : entry))
+    if (project?.id === item.id) setProject(renamed)
+  }, [project?.id, projects, refreshProjects, setProject])
+
+  const toggleProjectPinned = useCallback(async (item: Project) => {
+    const pinned = !item.pinned
+    try {
+      await backend.setProjectPinned(item.id, pinned)
+    } catch (error) {
+      if (!isBackendUnavailable(error)) {
+        setDiagnostic(errorMessage(error))
+        return
+      }
+    }
+    await refreshProjects(projects.map((entry) => entry.id === item.id ? { ...entry, pinned } : entry))
+  }, [projects, refreshProjects])
+
+  const deleteProject = useCallback(async (item: Project) => {
+    if (!window.confirm(`删除项目「${item.name}」？该项目下的对话记录会一并移除，磁盘文件不受影响。`)) return
+    try {
+      await backend.deleteProject(item.id)
+    } catch (error) {
+      if (!isBackendUnavailable(error)) {
+        setDiagnostic(errorMessage(error))
+        return
+      }
+    }
+    const remaining = projects.filter((entry) => entry.id !== item.id)
+    await refreshProjects(remaining)
+    if (project?.id !== item.id) return
+    const next = remaining[0]
+    if (next) await loadProjectWorkspace(next)
+    else closeProject()
+  }, [closeProject, loadProjectWorkspace, project?.id, projects, refreshProjects])
+
+  const revealProject = useCallback(async (item: Project) => {
+    try {
+      await backend.revealProject(item.id)
+    } catch (error) {
+      setDiagnostic(isBackendUnavailable(error) ? '请通过 Klaude 桌面应用打开项目目录。' : errorMessage(error))
+    }
+  }, [])
 
   const selectSession = useCallback(async (next: Session) => {
     setSession(next)
@@ -211,11 +352,8 @@ export function useAppController(): AppController {
       setSessions([created, ...sessions])
       setSession(created)
       setMessages([])
-    } catch {
-      const created = { ...demoSession, id: `local-${Date.now()}`, projectId: project.id, title }
-      setSessions([created, ...sessions])
-      setSession(created)
-      setMessages([])
+    } catch (error) {
+      setDiagnostic(error instanceof Error ? error.message : String(error))
     }
   }, [activeProviderName, model, project, sessions, setMessages, setSession, setSessions])
 
@@ -239,8 +377,9 @@ export function useAppController(): AppController {
     if (!project) return
     try {
       setFiles(await backend.browseProject(project.rootPath, path))
-    } catch {
-      setFiles(demoFiles.filter((item) => item.path.startsWith(path === '.' ? '' : path)))
+    } catch (error) {
+      setFiles([])
+      setDiagnostic(error instanceof Error ? error.message : String(error))
     }
   }, [project, setFiles])
 
@@ -251,8 +390,9 @@ export function useAppController(): AppController {
     if (!active && project) {
       try {
         active = await backend.createSession(project.id, text.slice(0, 36), activeProviderName, model)
-      } catch {
-        active = { ...demoSession, id: `local-${Date.now()}`, projectId: project.id, title: text.slice(0, 36) }
+      } catch (error) {
+        setDiagnostic(error instanceof Error ? error.message : String(error))
+        return
       }
       setSessions([active, ...sessions])
       setSession(active)
@@ -342,8 +482,8 @@ export function useAppController(): AppController {
       await persistSettings()
       setPage('home')
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.includes('unavailable') || message.includes('Wails')) {
+      const message = errorMessage(error)
+      if (isBackendUnavailable(error)) {
         setPage('home')
         return
       }
@@ -367,8 +507,8 @@ export function useAppController(): AppController {
       }
       return true
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.includes('unavailable') || message.includes('Wails')) return true
+      const message = errorMessage(error)
+      if (isBackendUnavailable(error)) return true
       setModelCatalog(previousCatalog)
       const previous = previousCatalog.profiles.find((profile) => profile.id === previousCatalog.activeId)
       if (previous) setModel(previous.model)
@@ -389,8 +529,8 @@ export function useAppController(): AppController {
       }
       return catalog
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.includes('unavailable') || message.includes('Wails')) {
+      const message = errorMessage(error)
+      if (isBackendUnavailable(error)) {
         const profile = { ...input, hasApiKey: Boolean(input.apiKey) }
         const catalog = {
           activeId: input.id,
@@ -410,8 +550,8 @@ export function useAppController(): AppController {
     try {
       return await backend.testModelConnection(input)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.includes('unavailable') || message.includes('Wails')) {
+      const message = errorMessage(error)
+      if (isBackendUnavailable(error)) {
         return { success: false, latencyMs: 0, message: '请通过 Klaude 桌面应用测试真实连接。' }
       }
       return { success: false, latencyMs: 0, message }
@@ -430,8 +570,8 @@ export function useAppController(): AppController {
       await persistSettings({ approvalMode: value })
       return true
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.includes('unavailable') || message.includes('Wails')) return true
+      const message = errorMessage(error)
+      if (isBackendUnavailable(error)) return true
       setApprovalMode(previous)
       setDiagnostic(message)
       return false
@@ -491,6 +631,7 @@ export function useAppController(): AppController {
     saveSettings,
     turnStatus,
     usage,
+    platform,
     project,
     projects,
     sessions,
@@ -502,7 +643,13 @@ export function useAppController(): AppController {
     setupDone,
     setupTotal,
     openProject,
+    chooseProjectForSession,
+    closeProject,
     selectProject,
+    renameProject,
+    toggleProjectPinned,
+    deleteProject,
+    revealProject,
     selectSession,
     createSession,
     renameCurrentSession,

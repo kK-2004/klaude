@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Bot, Check, CircleAlert, CircleCheck, FlaskConical, KeyRound, LoaderCircle, Plus, Save, ShieldCheck, Sparkles } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Bot, Check, ChevronDown, CircleAlert, CircleCheck, FlaskConical, KeyRound, LoaderCircle, Plus, Save, Search, ShieldCheck, Sparkles } from 'lucide-react'
 import { useApp } from '../app/use-app'
 import type { ModelProfile, ModelProfileInput, ProviderSpec } from '../lib/backend'
 
@@ -32,10 +32,42 @@ export function ModelSettings() {
   const [draft, setDraft] = useState<Draft>(() => active ? fromProfile(active) : newDraft())
   const [connection, setConnection] = useState<ConnectionState>({ kind: 'idle' })
   const [saving, setSaving] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [profileQuery, setProfileQuery] = useState('')
+  const [profileScrollbar, setProfileScrollbar] = useState({ top: 0, height: 32 })
+  const profilePickerRef = useRef<HTMLDivElement>(null)
+  const profileListRef = useRef<HTMLDivElement>(null)
+  const selectedProfile = modelCatalog.profiles.find((profile) => profile.id === draft.id)
+  const filteredProfiles = useMemo(() => {
+    const query = profileQuery.trim().toLocaleLowerCase()
+    if (!query) return modelCatalog.profiles
+    return modelCatalog.profiles.filter((profile) => `${profile.name} ${profile.model} ${profile.providerSpec} ${profile.apiMode}`.toLocaleLowerCase().includes(query))
+  }, [modelCatalog.profiles, profileQuery])
+  const profileListScrollable = filteredProfiles.length > 5
+
+  const syncProfileScrollbar = useCallback((element: HTMLDivElement | null) => {
+    if (!element || element.scrollHeight <= element.clientHeight) return
+    const trackHeight = Math.max(0, element.clientHeight - 8)
+    const height = Math.max(28, Math.round(trackHeight * element.clientHeight / element.scrollHeight))
+    const progress = element.scrollTop / (element.scrollHeight - element.clientHeight)
+    setProfileScrollbar({ height, top: Math.round(progress * (trackHeight - height)) })
+  }, [])
 
   useEffect(() => {
     if (active) setDraft(fromProfile(active))
   }, [active])
+  useEffect(() => {
+    const close = (event: MouseEvent) => {
+      if (!profilePickerRef.current?.contains(event.target as Node)) setProfileMenuOpen(false)
+    }
+    window.addEventListener('mousedown', close)
+    return () => window.removeEventListener('mousedown', close)
+  }, [])
+  useEffect(() => {
+    if (!profileMenuOpen || !profileListScrollable) return
+    const frame = window.requestAnimationFrame(() => syncProfileScrollbar(profileListRef.current))
+    return () => window.cancelAnimationFrame(frame)
+  }, [filteredProfiles.length, profileListScrollable, profileMenuOpen, syncProfileScrollbar])
 
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -82,18 +114,55 @@ export function ModelSettings() {
 
   return (
     <div className="model-settings">
-      <div className="model-profile-strip">
-        <div className="model-profile-tabs">
-          {modelCatalog.profiles.map((profile) => {
-            const Icon = profile.providerSpec === 'anthropic' ? Sparkles : Bot
-            return (
-              <button key={profile.id} type="button" className={draft.id === profile.id ? 'selected' : ''} onClick={() => { setDraft(fromProfile(profile)); setConnection({ kind: 'idle' }) }}>
-                <Icon size={14} /><span>{profile.name}</span>{profile.id === modelCatalog.activeId && <Check size={12} />}
-              </button>
-            )
-          })}
+      <div className="model-profile-toolbar">
+        <div className="model-profile-picker" ref={profilePickerRef}>
+          <button type="button" className="model-profile-trigger" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((value) => !value)}>
+            <span className={`model-profile-trigger-icon ${draft.providerSpec}`}>
+              {draft.providerSpec === 'anthropic' ? <Sparkles size={16} /> : <Bot size={16} />}
+            </span>
+            <span className="model-profile-trigger-copy">
+              <strong>{selectedProfile?.name || draft.name || '新模型配置'}</strong>
+              <small>{selectedProfile ? `${selectedProfile.model} · ${selectedProfile.providerSpec === 'anthropic' ? 'Anthropic' : 'OpenAI'}` : '尚未保存'}</small>
+            </span>
+            <ChevronDown size={14} />
+          </button>
+          {profileMenuOpen && (
+            <div className="model-profile-menu">
+              <label className="model-profile-search">
+                <Search size={13} />
+                <input autoFocus value={profileQuery} onChange={(event) => setProfileQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setProfileMenuOpen(false) }} placeholder="搜索名称、模型 ID…" />
+              </label>
+              <div className="model-profile-menu-summary"><span>{filteredProfiles.length} 个模型配置</span>{modelCatalog.activeId && <small>勾选项为当前使用</small>}</div>
+              <div className="model-profile-menu-list-shell">
+                <div
+                  ref={profileListRef}
+                  className={`model-profile-menu-list${profileListScrollable ? ' scrollable' : ''}`}
+                  onScroll={(event) => syncProfileScrollbar(event.currentTarget)}
+                >
+                  {filteredProfiles.map((profile) => {
+                    const Icon = profile.providerSpec === 'anthropic' ? Sparkles : Bot
+                    const isActive = profile.id === modelCatalog.activeId
+                    return (
+                      <button
+                        key={profile.id}
+                        type="button"
+                        className={draft.id === profile.id ? 'selected' : ''}
+                        onClick={() => { setDraft(fromProfile(profile)); setConnection({ kind: 'idle' }); setProfileMenuOpen(false); setProfileQuery('') }}
+                      >
+                        <span className={`model-profile-option-icon ${profile.providerSpec}`}><Icon size={15} /></span>
+                        <span><strong>{profile.name}</strong><small>{profile.model} · {profile.apiMode === 'chat_completions' ? 'Chat' : profile.apiMode === 'responses' ? 'Responses' : 'Messages'}</small></span>
+                        <span className="model-profile-option-status">{isActive && <Check size={13} />}</span>
+                      </button>
+                    )
+                  })}
+                  {filteredProfiles.length === 0 && <div className="model-profile-no-results">没有匹配的模型配置</div>}
+                </div>
+                {profileListScrollable && <span className="model-scroll-track" aria-hidden="true"><span style={{ height: profileScrollbar.height, transform: `translateY(${profileScrollbar.top}px)` }} /></span>}
+              </div>
+            </div>
+          )}
         </div>
-        <button type="button" className="model-add-button" onClick={() => { setDraft(newDraft()); setConnection({ kind: 'idle' }) }}><Plus size={14} />新增模型</button>
+        <button type="button" className="model-add-button" onClick={() => { setDraft(newDraft()); setConnection({ kind: 'idle' }); setProfileMenuOpen(false); setProfileQuery('') }}><Plus size={14} />新增模型</button>
       </div>
 
       <div className="model-editor">

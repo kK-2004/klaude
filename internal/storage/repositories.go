@@ -23,41 +23,87 @@ func (d *DB) CreateProject(ctx context.Context, project Project) error {
 		project.UpdatedAt = project.CreatedAt
 	}
 	return d.WriteTx(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO projects(id,name,root_path,git_root,created_at,updated_at) VALUES(?,?,?,?,?,?)`, project.ID, project.Name, project.RootPath, nullableString(project.GitRoot), unixMillis(project.CreatedAt), unixMillis(project.UpdatedAt))
+		_, err := tx.ExecContext(ctx, `INSERT INTO projects(id,name,root_path,git_root,pinned,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`, project.ID, project.Name, project.RootPath, nullableString(project.GitRoot), project.Pinned, unixMillis(project.CreatedAt), unixMillis(project.UpdatedAt))
 		return err
 	})
 }
 
-func (d *DB) GetProjectByRoot(ctx context.Context, root string) (Project, error) {
+const projectColumns = `id,name,root_path,git_root,pinned,created_at,updated_at`
+
+func scanProject(scan func(...any) error) (Project, error) {
 	var project Project
 	var gitRoot sql.NullString
 	var created, updated int64
-	err := d.SQL.QueryRowContext(ctx, `SELECT id,name,root_path,git_root,created_at,updated_at FROM projects WHERE root_path=?`, root).Scan(&project.ID, &project.Name, &project.RootPath, &gitRoot, &created, &updated)
-	if err != nil {
+	if err := scan(&project.ID, &project.Name, &project.RootPath, &gitRoot, &project.Pinned, &created, &updated); err != nil {
 		return Project{}, err
 	}
 	project.GitRoot, project.CreatedAt, project.UpdatedAt = gitRoot.String, timeFromMillis(created), timeFromMillis(updated)
 	return project, nil
 }
 
+func (d *DB) GetProject(ctx context.Context, projectID string) (Project, error) {
+	return scanProject(d.SQL.QueryRowContext(ctx, `SELECT `+projectColumns+` FROM projects WHERE id=?`, projectID).Scan)
+}
+
+func (d *DB) GetProjectByRoot(ctx context.Context, root string) (Project, error) {
+	return scanProject(d.SQL.QueryRowContext(ctx, `SELECT `+projectColumns+` FROM projects WHERE root_path=?`, root).Scan)
+}
+
+// ListProjects 置顶项目排在前面，其余按最近使用倒序。
 func (d *DB) ListProjects(ctx context.Context) ([]Project, error) {
-	rows, err := d.SQL.QueryContext(ctx, `SELECT id,name,root_path,git_root,created_at,updated_at FROM projects ORDER BY updated_at DESC`)
+	rows, err := d.SQL.QueryContext(ctx, `SELECT `+projectColumns+` FROM projects ORDER BY pinned DESC, updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var projects []Project
 	for rows.Next() {
-		var project Project
-		var gitRoot sql.NullString
-		var created, updated int64
-		if err := rows.Scan(&project.ID, &project.Name, &project.RootPath, &gitRoot, &created, &updated); err != nil {
+		project, err := scanProject(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		project.GitRoot, project.CreatedAt, project.UpdatedAt = gitRoot.String, timeFromMillis(created), timeFromMillis(updated)
 		projects = append(projects, project)
 	}
 	return projects, rows.Err()
+}
+
+func (d *DB) RenameProject(ctx context.Context, projectID, name string) error {
+	if name == "" {
+		return errors.New("storage: project name cannot be empty")
+	}
+	return d.writeOne(ctx, `UPDATE projects SET name=?,updated_at=? WHERE id=?`, name, unixMillis(time.Now().UTC()), projectID)
+}
+
+func (d *DB) SetProjectPinned(ctx context.Context, projectID string, pinned bool) error {
+	return d.writeOne(ctx, `UPDATE projects SET pinned=? WHERE id=?`, pinned, projectID)
+}
+
+// DeleteProject 依赖外键级联，同时移除该项目下的会话、消息与 turn 历史。
+func (d *DB) DeleteProject(ctx context.Context, projectID string) error {
+	return d.writeOne(ctx, `DELETE FROM projects WHERE id=?`, projectID)
+}
+
+// MoveSession 把会话改挂到另一个项目，用于在草稿对话里重选项目。
+func (d *DB) MoveSession(ctx context.Context, sessionID, projectID string) error {
+	return d.writeOne(ctx, `UPDATE sessions SET project_id=?,updated_at=? WHERE id=?`, projectID, unixMillis(time.Now().UTC()), sessionID)
+}
+
+// writeOne 执行单行写入，受影响行数为 0 时返回 sql.ErrNoRows。
+func (d *DB) writeOne(ctx context.Context, query string, args ...any) error {
+	return d.WriteTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
 }
 
 func (d *DB) CreateSession(ctx context.Context, session Session) error {
@@ -114,40 +160,14 @@ func (d *DB) RenameSession(ctx context.Context, sessionID, title string) error {
 	if title == "" {
 		return errors.New("storage: session title cannot be empty")
 	}
-	return d.WriteTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `UPDATE sessions SET title=?,updated_at=? WHERE id=?`, title, unixMillis(time.Now().UTC()), sessionID)
-		if err != nil {
-			return err
-		}
-		count, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if count == 0 {
-			return sql.ErrNoRows
-		}
-		return nil
-	})
+	return d.writeOne(ctx, `UPDATE sessions SET title=?,updated_at=? WHERE id=?`, title, unixMillis(time.Now().UTC()), sessionID)
 }
 
 func (d *DB) UpdateSessionProviderModel(ctx context.Context, sessionID, provider, model string) error {
 	if provider == "" || model == "" {
 		return errors.New("storage: provider and model cannot be empty")
 	}
-	return d.WriteTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `UPDATE sessions SET provider=?,model=?,updated_at=? WHERE id=?`, provider, model, unixMillis(time.Now().UTC()), sessionID)
-		if err != nil {
-			return err
-		}
-		count, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if count == 0 {
-			return sql.ErrNoRows
-		}
-		return nil
-	})
+	return d.writeOne(ctx, `UPDATE sessions SET provider=?,model=?,updated_at=? WHERE id=?`, provider, model, unixMillis(time.Now().UTC()), sessionID)
 }
 
 // CreateTurnWithUserMessage 原子创建 running turn + 用户消息，并拒绝同会话已有活跃 turn。

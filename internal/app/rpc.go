@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/klaude/klaude/internal/config"
@@ -27,6 +30,7 @@ type ProjectDTO struct {
 	Name      string `json:"name"`
 	RootPath  string `json:"rootPath"`
 	GitRoot   string `json:"gitRoot,omitempty"`
+	Pinned    bool   `json:"pinned"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
 }
@@ -91,6 +95,29 @@ func (r *RPCService) OpenProject(path string) (ProjectDTO, error) {
 	return mapProject(project), err
 }
 
+func (r *RPCService) RenameProject(projectID, name string) (ProjectDTO, error) {
+	renamed, err := r.service.RenameProject(context.Background(), projectID, name)
+	return mapProject(renamed), err
+}
+
+func (r *RPCService) SetProjectPinned(projectID string, pinned bool) (ProjectDTO, error) {
+	updated, err := r.service.SetProjectPinned(context.Background(), projectID, pinned)
+	return mapProject(updated), err
+}
+
+func (r *RPCService) DeleteProject(projectID string) error {
+	return r.service.DeleteProject(context.Background(), projectID)
+}
+
+func (r *RPCService) RevealProject(projectID string) error {
+	return r.service.RevealProject(context.Background(), projectID)
+}
+
+func (r *RPCService) MoveSession(sessionID, projectID string) (SessionDTO, error) {
+	moved, err := r.service.MoveSession(context.Background(), sessionID, projectID)
+	return mapSession(moved), err
+}
+
 func (r *RPCService) CreateSession(projectID, title, providerName, modelName string) (SessionDTO, error) {
 	session, err := r.service.CreateSession(context.Background(), projectID, title, providerName, modelName)
 	return mapSession(session), err
@@ -142,9 +169,38 @@ func (r *RPCService) CreateGitWorktree(root, startRef, branchName, targetPath st
 
 func (r *RPCService) SelectDirectory(defaultDirectory string) (string, error) {
 	return runtime.OpenDirectoryDialog(r.service.runtimeContext(), runtime.OpenDialogOptions{
-		DefaultDirectory: defaultDirectory,
+		DefaultDirectory: resolveDialogDirectory(defaultDirectory),
 		Title:            "选择目录",
 	})
+}
+
+func resolveDialogDirectory(candidate string) string {
+	candidate = strings.TrimSpace(candidate)
+	home, _ := os.UserHomeDir()
+	if candidate == "~" {
+		candidate = home
+	} else if strings.HasPrefix(candidate, "~"+string(filepath.Separator)) && home != "" {
+		candidate = filepath.Join(home, strings.TrimPrefix(candidate, "~"+string(filepath.Separator)))
+	}
+
+	if directoryExists(candidate) {
+		if absolute, err := filepath.Abs(candidate); err == nil {
+			return absolute
+		}
+		return filepath.Clean(candidate)
+	}
+	if directoryExists(home) {
+		return home
+	}
+	return ""
+}
+
+func directoryExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func (r *RPCService) Capabilities() []project.Capability {
@@ -187,7 +243,7 @@ func (r *RPCService) TestModelConnection(input ModelProfileInput) (ModelConnecti
 }
 
 func mapProject(project storage.Project) ProjectDTO {
-	return ProjectDTO{ID: project.ID, Name: project.Name, RootPath: project.RootPath, GitRoot: project.GitRoot, CreatedAt: formatTime(project.CreatedAt), UpdatedAt: formatTime(project.UpdatedAt)}
+	return ProjectDTO{ID: project.ID, Name: project.Name, RootPath: project.RootPath, GitRoot: project.GitRoot, Pinned: project.Pinned, CreatedAt: formatTime(project.CreatedAt), UpdatedAt: formatTime(project.UpdatedAt)}
 }
 
 func mapProjects(projects []storage.Project) []ProjectDTO {

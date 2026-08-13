@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  AtSign, Check, ChevronDown, Folder, FolderOpen, GitPullRequest,
-  LayoutGrid, ListChecks, MessageSquare, Moon, PanelLeft, Plus, Search, Settings,
-  Sun, User,
+  AtSign, Check, ChevronDown, Folder, FolderOpen, FolderSearch, GitPullRequest,
+  LayoutGrid, ListChecks, MessageSquare, Moon, PanelLeft, PencilLine, Pin, PinOff,
+  Plus, Search, Settings, Sun, Trash2, User,
 } from 'lucide-react'
 import { useApp } from '../app/use-app'
 import type { AppPage } from '../app/types'
+import type { Project } from '../types/backend'
 import { useThemeStore } from '../stores/theme'
+import { ContextMenu } from './ContextMenu'
+import type { ContextMenuItem } from './ContextMenu'
 
 const nav: { id: AppPage; label: string; icon: typeof Plus }[] = [
   { id: 'home', label: '新对话', icon: Plus },
@@ -17,8 +20,9 @@ const nav: { id: AppPage; label: string; icon: typeof Plus }[] = [
 
 export function Sidebar() {
   const {
-    page, setPage, startNewChat, project, projects, sessions, session,
+    page, setPage, startNewChat, project, projects, sessions, session, platform,
     selectProject, selectSession, renameCurrentSession, openProject,
+    renameProject, toggleProjectPinned, deleteProject, revealProject,
     setupDone, setupTotal, model, messages, files, capabilities, setSidebarOpen,
   } = useApp()
   const theme = useThemeStore((state) => state.theme)
@@ -27,6 +31,7 @@ export function Sidebar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [setupOpen, setSetupOpen] = useState(false)
+  const [projectMenu, setProjectMenu] = useState<{ project: Project; x: number; y: number }>()
   const searchRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -41,6 +46,14 @@ export function Sidebar() {
     window.addEventListener('mousedown', onClick)
     return () => window.removeEventListener('mousedown', onClick)
   }, [])
+
+  const revealLabel = platform === 'windows' ? '在资源管理器中打开' : platform === 'darwin' ? '在 Finder 中打开' : '在文件管理器中打开'
+  const projectMenuItems = (item: Project): ContextMenuItem[] => [
+    { id: 'pin', label: item.pinned ? '取消置顶' : '置顶', icon: item.pinned ? PinOff : Pin, onSelect: () => void toggleProjectPinned(item) },
+    { id: 'rename', label: '重命名项目', icon: PencilLine, onSelect: () => void renameProject(item) },
+    { id: 'reveal', label: revealLabel, icon: platform === 'windows' ? FolderSearch : FolderOpen, onSelect: () => void revealProject(item) },
+    { id: 'delete', label: '删除', icon: Trash2, danger: true, onSelect: () => void deleteProject(item) },
+  ]
 
   const q = query.trim().toLowerCase()
   const visibleProjects = q ? projects.filter((item) => item.name.toLowerCase().includes(q) || item.rootPath.toLowerCase().includes(q)) : projects
@@ -129,9 +142,16 @@ export function Sidebar() {
         <div className="project-list">
           {visibleProjects.map((item) => (
             <div key={item.id} className={`project-block ${item.id === project?.id ? 'active' : ''}`}>
-              <button type="button" className="project-row" onClick={() => void selectProject(item)} title={item.rootPath}>
+              <button
+                type="button"
+                className="project-row"
+                onClick={() => void selectProject(item)}
+                onContextMenu={(event) => { event.preventDefault(); setProjectMenu({ project: item, x: event.clientX, y: event.clientY }) }}
+                title={item.rootPath}
+              >
                 <Folder size={15} strokeWidth={1.75} />
                 <span>{item.name}</span>
+                {item.pinned && <Pin className="project-pin" size={12} strokeWidth={1.75} aria-label="已置顶" />}
               </button>
               {item.id === project?.id && visibleSessions.slice(0, 4).map((entry) => (
                 <button
@@ -193,6 +213,15 @@ export function Sidebar() {
           </button>
         </div>
       </div>
+
+      {projectMenu && (
+        <ContextMenu
+          anchor={projectMenu}
+          label={`项目 ${projectMenu.project.name}`}
+          items={projectMenuItems(projectMenu.project)}
+          onClose={() => setProjectMenu(undefined)}
+        />
+      )}
     </aside>
   )
 }

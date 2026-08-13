@@ -1,6 +1,6 @@
 import type { Message } from '../types/backend'
 import type { Capability, FileChange, FileEntry, Project, Session } from '../types/backend'
-import type { ApprovalMode, ModelCatalog, ModelConnectionResult, ModelProfileInput } from '../lib/backend'
+import type { ApprovalMode, ModelCatalog, ModelConnectionResult, ModelProfileInput, Platform } from '../lib/backend'
 
 export type AppPage = 'home' | 'pull-requests' | 'sites' | 'scheduled' | 'plugins' | 'settings'
 export type AppState = 'loading' | 'ready' | 'diagnostic' | 'fatal'
@@ -49,6 +49,7 @@ export type AppController = {
   saveSettings: () => Promise<void>
   turnStatus: string
   usage: { input?: number; output?: number }
+  platform: Platform
   project?: Project
   projects: Project[]
   sessions: Session[]
@@ -60,7 +61,13 @@ export type AppController = {
   setupDone: number
   setupTotal: number
   openProject: () => Promise<void>
+  chooseProjectForSession: () => Promise<void>
+  closeProject: () => void
   selectProject: (project: Project) => Promise<void>
+  renameProject: (project: Project) => Promise<void>
+  toggleProjectPinned: (project: Project) => Promise<void>
+  deleteProject: (project: Project) => Promise<void>
+  revealProject: (project: Project) => Promise<void>
   selectSession: (session: Session) => Promise<void>
   createSession: (title?: string) => Promise<void>
   renameCurrentSession: () => Promise<void>

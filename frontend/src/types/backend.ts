@@ -1,4 +1,4 @@
-export type Project = { id: string; name: string; rootPath: string; gitRoot?: string; createdAt: string; updatedAt: string }
+export type Project = { id: string; name: string; rootPath: string; gitRoot?: string; pinned?: boolean; createdAt: string; updatedAt: string }
 export type SessionStatus = 'idle' | 'running' | 'waiting_approval' | 'cancelled' | 'failed' | 'completed'
 export type Session = { id: string; projectId: string; title: string; provider: string; model: string; status: SessionStatus; createdAt: string; updatedAt: string }
 export type TurnStatus = 'queued' | 'running' | 'waiting_approval' | 'completed' | 'cancelled' | 'failed' | 'interrupted'

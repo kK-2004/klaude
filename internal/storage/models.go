@@ -7,6 +7,7 @@ type Project struct {
 	Name      string    `json:"name"`
 	RootPath  string    `json:"rootPath"`
 	GitRoot   string    `json:"gitRoot,omitempty"`
+	Pinned    bool      `json:"pinned"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

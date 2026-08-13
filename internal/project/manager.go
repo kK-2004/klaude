@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/klaude/klaude/internal/storage"
@@ -37,6 +38,24 @@ func (m *Manager) Open(ctx context.Context, input string) (storage.Project, erro
 		return storage.Project{}, err
 	}
 	return project, nil
+}
+
+// Reveal 在系统文件管理器中打开目录：macOS 用 Finder，Windows 用资源管理器，其余走 xdg-open。
+func Reveal(ctx context.Context, path string) error {
+	root, err := canonicalRoot(path)
+	if err != nil {
+		return err
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.CommandContext(ctx, "open", root).Run()
+	case "windows":
+		// explorer.exe 打开成功时也可能返回非零退出码，因此忽略退出状态。
+		_ = exec.CommandContext(ctx, "explorer", filepath.FromSlash(root)).Run()
+		return nil
+	default:
+		return exec.CommandContext(ctx, "xdg-open", root).Run()
+	}
 }
 
 func canonicalRoot(input string) (string, error) {

@@ -20,7 +20,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 var ErrReadOnly = errors.New("storage: database is read-only")
 var ErrActiveTurn = errors.New("storage: session already has an active turn")
@@ -112,8 +112,14 @@ func (d *DB) migrate(ctx context.Context) error {
 
 // applyMigration 在同一事务内执行 SQL 文件并写入 schema_migrations，保证可回滚。
 func (d *DB) applyMigration(ctx context.Context, version int) error {
-	filename := fmt.Sprintf("migrations/%03d_initial.sql", version)
-	sqlBytes, err := fs.ReadFile(migrationFiles, filename)
+	matches, err := fs.Glob(migrationFiles, fmt.Sprintf("migrations/%03d_*.sql", version))
+	if err != nil {
+		return err
+	}
+	if len(matches) != 1 {
+		return fmt.Errorf("expected one migration file for version %d, found %d", version, len(matches))
+	}
+	sqlBytes, err := fs.ReadFile(migrationFiles, matches[0])
 	if err != nil {
 		return err
 	}

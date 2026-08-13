@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -115,6 +116,78 @@ func TestReadOnlyDBRejectsWrites(t *testing.T) {
 	db.ReadOnly = true
 	if err := db.SetSetting(ctx, Setting{Key: "x", ValueJSON: `1`}); err != ErrReadOnly {
 		t.Fatalf("write error = %v, want %v", err, ErrReadOnly)
+	}
+}
+
+func TestProjectPinningOrdersListAndRenameDeletePersist(t *testing.T) {
+	db, ctx := openTestDB(t)
+	now := time.Now().UTC()
+	older := Project{ID: NewID(), Name: "older", RootPath: t.TempDir(), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)}
+	newer := Project{ID: NewID(), Name: "newer", RootPath: t.TempDir(), CreatedAt: now, UpdatedAt: now}
+	for _, item := range []Project{older, newer} {
+		if err := db.CreateProject(ctx, item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.SetProjectPinned(ctx, older.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	projects, err := db.ListProjects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 2 || projects[0].ID != older.ID || !projects[0].Pinned {
+		t.Fatalf("pinned project must sort first, got %+v", projects)
+	}
+	if err := db.RenameProject(ctx, older.ID, "renamed"); err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := db.GetProject(ctx, older.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed.Name != "renamed" || !renamed.Pinned {
+		t.Fatalf("rename must keep pin state, got %+v", renamed)
+	}
+	if err := db.DeleteProject(ctx, older.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.GetProject(ctx, older.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("deleted project lookup error = %v, want %v", err, sql.ErrNoRows)
+	}
+	if err := db.DeleteProject(ctx, older.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("repeated delete error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
+func TestDeleteProjectCascadesSessionsAndMoveSessionRebindsProject(t *testing.T) {
+	db, ctx := openTestDB(t)
+	source := Project{ID: NewID(), Name: "source", RootPath: t.TempDir()}
+	target := Project{ID: NewID(), Name: "target", RootPath: t.TempDir()}
+	for _, item := range []Project{source, target} {
+		if err := db.CreateProject(ctx, item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	draft := Session{ID: NewID(), ProjectID: source.ID, Title: "draft", Provider: "fake", Model: "fake-1"}
+	if err := db.CreateSession(ctx, draft); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.MoveSession(ctx, draft.ID, target.ID); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := db.GetSession(ctx, draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.ProjectID != target.ID {
+		t.Fatalf("session project = %q, want %q", moved.ProjectID, target.ID)
+	}
+	if err := db.DeleteProject(ctx, target.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.GetSession(ctx, draft.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("session must be removed with its project, error = %v", err)
 	}
 }
 

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Bot, Check, ChevronDown, Clock, Folder, PencilLine, ShieldCheck, Sparkles, Square, UserRoundCheck, Zap } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowUp, Bot, Check, ChevronDown, Clock, Folder, PencilLine, ShieldCheck, Sparkles, Square, UserRoundCheck, X, Zap } from 'lucide-react'
 import { useApp } from '../app/use-app'
 import type { ApprovalMode } from '../lib/backend'
 import { GitBranchSelector } from './GitBranchSelector'
@@ -7,7 +7,7 @@ import { GitBranchSelector } from './GitBranchSelector'
 export function Composer() {
   const {
     appState, composer, setComposer, running, submitMessage, stopAgent,
-    messages, model, project, openProject,
+    messages, model, project, chooseProjectForSession, closeProject,
   } = useApp()
   const showContext = messages.length === 0
 
@@ -15,9 +15,21 @@ export function Composer() {
     <div className="composer-dock">
       {showContext && (
         <div className="context-bar">
-          <button type="button" className="context-pill context-project" title={project?.rootPath ?? '选择项目目录'} onClick={() => void openProject()}>
-            <Folder size={13} strokeWidth={1.75} />{project?.name ?? '选择项目'}
-          </button>
+          <div className="context-pill context-project">
+            <button
+              type="button"
+              className="context-project-main"
+              title={project?.rootPath ?? '选择项目目录'}
+              onClick={() => void chooseProjectForSession()}
+            >
+              <Folder size={13} strokeWidth={1.75} />{project?.name ?? '选择项目'}
+            </button>
+            {project && (
+              <button type="button" className="context-project-close" aria-label="关闭项目" title="关闭项目" onClick={closeProject}>
+                <X size={12} strokeWidth={2.2} />
+              </button>
+            )}
+          </div>
           <GitBranchSelector gitRoot={project?.gitRoot} />
         </div>
       )}
@@ -100,14 +112,30 @@ function ApprovalModeSelector() {
 function ModelSelector({ model }: { model: string }) {
   const { modelCatalog, selectModelProfile, openModelSettings } = useApp()
   const [open, setOpen] = useState(false)
+  const [scrollbar, setScrollbar] = useState({ top: 0, height: 32 })
   const ref = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const active = modelCatalog.profiles.find((profile) => profile.id === modelCatalog.activeId)
+  const hasOverflowList = modelCatalog.profiles.length > 5
+
+  const syncScrollbar = useCallback((element: HTMLDivElement | null) => {
+    if (!element || element.scrollHeight <= element.clientHeight) return
+    const trackHeight = Math.max(0, element.clientHeight - 8)
+    const height = Math.max(28, Math.round(trackHeight * element.clientHeight / element.scrollHeight))
+    const progress = element.scrollTop / (element.scrollHeight - element.clientHeight)
+    setScrollbar({ height, top: Math.round(progress * (trackHeight - height)) })
+  }, [])
 
   useEffect(() => {
     const close = (event: MouseEvent) => { if (!ref.current?.contains(event.target as Node)) setOpen(false) }
     window.addEventListener('mousedown', close)
     return () => window.removeEventListener('mousedown', close)
   }, [])
+  useEffect(() => {
+    if (!open || !hasOverflowList) return
+    const frame = window.requestAnimationFrame(() => syncScrollbar(listRef.current))
+    return () => window.cancelAnimationFrame(frame)
+  }, [hasOverflowList, modelCatalog.profiles.length, open, syncScrollbar])
 
   return (
     <div className="composer-control model-control" ref={ref}>
@@ -116,27 +144,36 @@ function ModelSelector({ model }: { model: string }) {
       </button>
       {open && (
         <div className="composer-popover model-popover">
-          <div className="model-popover-list" role="listbox" aria-label="选择模型">
-            {modelCatalog.profiles.map((profile) => {
-              const ProviderIcon = profile.providerSpec === 'anthropic' ? Sparkles : Bot
-              const selected = profile.id === modelCatalog.activeId
-              const mode = profile.apiMode === 'chat_completions' ? 'Chat' : profile.apiMode === 'responses' ? 'Responses' : 'Messages'
-              return (
-                <button
-                  key={profile.id}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  className={selected ? 'selected' : ''}
-                  onClick={async () => { if (await selectModelProfile(profile.id)) setOpen(false) }}
-                >
-                  <span className={`model-provider-icon ${profile.providerSpec}`}><ProviderIcon size={18} strokeWidth={1.8} /></span>
-                  <span className="model-option-copy"><strong>{profile.name}</strong><small>{profile.model}</small></span>
-                  <span className="model-option-meta"><small>{mode} · {formatContext(profile.contextWindow)}</small>{selected && <Check size={14} strokeWidth={2.2} />}</span>
-                </button>
-              )
-            })}
-            {modelCatalog.profiles.length === 0 && <div className="model-popover-empty">还没有可用模型</div>}
+          <div className="model-list-shell">
+            <div
+              ref={listRef}
+              className={`model-popover-list${hasOverflowList ? ' scrollable' : ''}`}
+              role="listbox"
+              aria-label="选择模型"
+              onScroll={(event) => syncScrollbar(event.currentTarget)}
+            >
+              {modelCatalog.profiles.map((profile) => {
+                const ProviderIcon = profile.providerSpec === 'anthropic' ? Sparkles : Bot
+                const selected = profile.id === modelCatalog.activeId
+                const mode = profile.apiMode === 'chat_completions' ? 'Chat' : profile.apiMode === 'responses' ? 'Responses' : 'Messages'
+                return (
+                  <button
+                    key={profile.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={selected ? 'selected' : ''}
+                    onClick={async () => { if (await selectModelProfile(profile.id)) setOpen(false) }}
+                  >
+                    <span className={`model-provider-icon ${profile.providerSpec}`}><ProviderIcon size={18} strokeWidth={1.8} /></span>
+                    <span className="model-option-copy"><strong>{profile.name}</strong><small>{profile.model} · {mode} · {formatContext(profile.contextWindow)}</small></span>
+                    <span className="model-option-check">{selected && <Check size={14} strokeWidth={2.2} />}</span>
+                  </button>
+                )
+              })}
+              {modelCatalog.profiles.length === 0 && <div className="model-popover-empty">还没有可用模型</div>}
+            </div>
+            {hasOverflowList && <span className="model-scroll-track" aria-hidden="true"><span style={{ height: scrollbar.height, transform: `translateY(${scrollbar.top}px)` }} /></span>}
           </div>
           <button type="button" className="configure-model-button" onClick={() => { setOpen(false); openModelSettings() }}><PencilLine size={17} />配置自定义模型</button>
         </div>

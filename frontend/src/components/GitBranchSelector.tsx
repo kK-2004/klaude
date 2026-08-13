@@ -271,24 +271,30 @@ function BranchGroup({
   return (
     <section className="branch-group">
       <div className="branch-group-title">{remote ? <Cloud size={13} /> : <GitBranch size={13} />}{title}<span>{branches.length}</span></div>
-      {branches.length === 0 ? <div className="branch-empty">没有{title}</div> : branches.map((branch) => (
-        <button
-          type="button"
-          key={`${branch.remote ? 'remote' : 'local'}:${branch.name}`}
-          className={`branch-row ${branch.current ? 'current' : ''}`}
-          aria-current={branch.current ? 'true' : undefined}
-          disabled={busy !== ''}
-          onClick={() => void onCheckout(branch)}
-          onContextMenu={(event) => {
-            event.preventDefault()
-            onContextMenu({ branch, x: Math.min(event.clientX, window.innerWidth - 220), y: Math.min(event.clientY, window.innerHeight - 132) })
-          }}
-        >
-          {busy === `checkout:${branch.name}` ? <Loader2 className="spin" size={14} /> : branch.remote ? <Cloud size={14} /> : <GitBranch size={14} />}
-          <span>{branch.name}</span>
-          {branch.current && <Check size={14} />}
-        </button>
-      ))}
+      {branches.length === 0 ? <div className="branch-empty">没有{title}</div> : (
+        <div className="branch-list">
+          {branches.map((branch) => (
+            <button
+              type="button"
+              key={`${branch.remote ? 'remote' : 'local'}:${branch.name}`}
+              className={`branch-row ${branch.current ? 'current' : ''}`}
+              aria-current={branch.current ? 'true' : undefined}
+              disabled={busy !== ''}
+              onClick={() => void onCheckout(branch)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                onContextMenu({ branch, x: Math.min(event.clientX, window.innerWidth - 220), y: Math.min(event.clientY, window.innerHeight - 132) })
+              }}
+            >
+              <span className="branch-kind-icon">
+                {busy === `checkout:${branch.name}` ? <Loader2 className="spin" size={14} /> : branch.remote ? <Cloud size={14} /> : <GitBranch size={14} />}
+              </span>
+              <span className="branch-name">{branch.name}</span>
+              {branch.current && <span className="branch-current-mark" aria-label="当前分支"><Check size={13} strokeWidth={2.2} /></span>}
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   )
 }

@@ -9,10 +9,15 @@ const call = async <T>(name: string, ...args: unknown[]): Promise<T> => {
 }
 
 export const backend = {
-  health: () => call<{ ready: boolean; product: string; version: string }>('Health'),
+  health: () => call<{ ready: boolean; product: string; version: string; platform?: Platform }>('Health'),
   listProjects: () => call<Project[]>('ListProjects'),
   openProject: (path: string) => call<Project>('OpenProject', path),
+  renameProject: (projectId: string, name: string) => call<Project>('RenameProject', projectId, name),
+  setProjectPinned: (projectId: string, pinned: boolean) => call<Project>('SetProjectPinned', projectId, pinned),
+  deleteProject: (projectId: string) => call<void>('DeleteProject', projectId),
+  revealProject: (projectId: string) => call<void>('RevealProject', projectId),
   createSession: (projectId: string, title: string, provider: string, model: string) => call<Session>('CreateSession', projectId, title, provider, model),
+  moveSession: (sessionId: string, projectId: string) => call<Session>('MoveSession', sessionId, projectId),
   listSessions: (projectId: string) => call<Session[]>('ListSessions', projectId),
   renameSession: (sessionId: string, title: string) => call<void>('RenameSession', sessionId, title),
   loadConversation: (sessionId: string) => call<ConversationSnapshot>('LoadConversation', sessionId),
@@ -36,6 +41,7 @@ export const backend = {
   testModelConnection: (input: ModelProfileInput) => call<ModelConnectionResult>('TestModelConnection', input),
 }
 
+export type Platform = 'darwin' | 'windows' | 'linux'
 export type ApprovalMode = 'ask' | 'manual' | 'full'
 export type ProviderSpec = 'openai' | 'anthropic'
 export type ModelAPIMode = 'chat_completions' | 'responses' | 'messages'

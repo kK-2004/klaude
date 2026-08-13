@@ -23,15 +23,6 @@ type WorkspaceState = {
   setPanelWidth: (side: 'left' | 'right', width: number) => void
 }
 
-const initialProject: Project = {
-  id: 'demo-project',
-  name: 'klaude',
-  rootPath: '~/Documents/ChatGPT/klaude',
-  gitRoot: '~/Documents/ChatGPT/klaude',
-  createdAt: new Date(0).toISOString(),
-  updatedAt: new Date(0).toISOString(),
-}
-
 const readWidth = (key: string, fallback: number) => {
   if (typeof window === 'undefined') return fallback
   const value = Number(window.localStorage.getItem(key))
@@ -39,8 +30,8 @@ const readWidth = (key: string, fallback: number) => {
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
-  project: initialProject,
-  projects: [initialProject],
+  project: undefined,
+  projects: [],
   sessions: [],
   files: [],
   capabilities: [],
