@@ -5,13 +5,17 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 
+	"github.com/klaude/klaude/internal/agent"
 	"github.com/klaude/klaude/internal/approval"
 	"github.com/klaude/klaude/internal/config"
 	"github.com/klaude/klaude/internal/filesystem"
 	gitservice "github.com/klaude/klaude/internal/git"
 	"github.com/klaude/klaude/internal/project"
+	"github.com/klaude/klaude/internal/secret"
 	"github.com/klaude/klaude/internal/session"
 	"github.com/klaude/klaude/internal/storage"
 )
@@ -30,6 +34,8 @@ type Service struct {
 	startTurn   func(context.Context, string, string) error
 	approvals   *approval.Manager
 	undone      map[string]bool
+	locks       *agent.MutationLocks
+	secrets     secret.Store
 	composition *Composition
 	appContext  context.Context
 }
@@ -38,7 +44,7 @@ func NewService(logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{logger: logger, approvals: approval.NewManager(), undone: make(map[string]bool)}
+	return &Service{logger: logger, approvals: approval.NewManager(), undone: make(map[string]bool), locks: agent.NewMutationLocks(), secrets: secret.NewStore()}
 }
 
 func NewServiceWithDataDirs(logger *slog.Logger, dirs storage.DataDirs) *Service {
@@ -68,6 +74,14 @@ func (s *Service) Startup(appContext context.Context) {
 		s.composition = composition
 		s.db, s.projects, s.sessions = composition.DB, composition.Projects, composition.Sessions
 		s.config, s.approvals = composition.Config, composition.Approvals
+		if s.startTurn == nil {
+			s.startTurn = s.runTurn
+		}
+		// Wails lifecycle contexts carry an events bridge. Plain contexts used by
+		// tests and headless callers must not be passed to runtime.EventsEmit.
+		if appContext != nil && appContext.Value("events") != nil {
+			composition.Events.Subscribe(NewEventBridge().Forward)
+		}
 	}
 	s.mu.Lock()
 	s.appContext = appContext
@@ -145,21 +159,96 @@ func (s *Service) RenameSession(ctx context.Context, sessionID, title string) er
 	return s.db.RenameSession(ctx, sessionID, title)
 }
 
-func (s *Service) Settings() config.Config { return s.config.Config }
+func (s *Service) Settings() config.Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.config.Config
+}
 
 // SettingsUpdate is the desktop settings patch persisted to the user config.toml.
 type SettingsUpdate struct {
-	ParallelTools bool `json:"parallelTools"`
-	LLMSchedule   bool `json:"llmSchedule"`
+	Theme              string `json:"theme"`
+	Endpoint           string `json:"endpoint"`
+	Model              string `json:"model"`
+	CredentialEnv      string `json:"credentialEnv"`
+	ContextBudgetChars int    `json:"contextBudgetChars"`
+	MaxTurns           int    `json:"maxTurns"`
+	ParallelTools      bool   `json:"parallelTools"`
+	LLMSchedule        bool   `json:"llmSchedule"`
+	ApprovalMode       string `json:"approvalMode"`
 }
 
-// UpdateSettings applies agent concurrency flags and writes the user config file.
+var credentialEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// UpdateSettings applies the complete desktop settings form and writes the user config file.
 func (s *Service) UpdateSettings(_ context.Context, update SettingsUpdate) (config.Config, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cfg := s.config.Config
+	if update.Theme == "" {
+		update.Theme = cfg.UI.Theme
+	}
+	if strings.TrimSpace(update.Endpoint) == "" {
+		update.Endpoint = cfg.Provider.Endpoint
+	}
+	if strings.TrimSpace(update.Model) == "" {
+		update.Model = cfg.Provider.Model
+	}
+	if strings.TrimSpace(update.CredentialEnv) == "" && cfg.Provider.CredentialKey == "" {
+		update.CredentialEnv = cfg.Provider.CredentialEnv
+	}
+	if update.ContextBudgetChars == 0 {
+		update.ContextBudgetChars = cfg.Agent.ContextBudgetChars
+	}
+	if update.MaxTurns == 0 {
+		update.MaxTurns = cfg.Agent.MaxTurns
+	}
+	if update.ApprovalMode == "" {
+		update.ApprovalMode = approvalModeFromConfig(cfg)
+	}
+	if update.Theme != "light" && update.Theme != "dark" && update.Theme != "system" {
+		return config.Config{}, errors.New("theme must be light, dark, or system")
+	}
+	update.Endpoint = strings.TrimSpace(update.Endpoint)
+	update.Model = strings.TrimSpace(update.Model)
+	update.CredentialEnv = strings.TrimSpace(update.CredentialEnv)
+	if update.Endpoint == "" || update.Model == "" {
+		return config.Config{}, errors.New("provider endpoint and model are required")
+	}
+	if update.CredentialEnv == "" && cfg.Provider.CredentialKey == "" {
+		return config.Config{}, errors.New("provider credential is required")
+	}
+	if update.CredentialEnv != "" && !credentialEnvPattern.MatchString(update.CredentialEnv) {
+		return config.Config{}, errors.New("credential environment variable is invalid")
+	}
+	if update.ContextBudgetChars <= 0 || update.MaxTurns <= 0 {
+		return config.Config{}, errors.New("context budget and maximum turns must be greater than zero")
+	}
+	cfg.UI.Theme = update.Theme
+	cfg.Provider.Endpoint = update.Endpoint
+	cfg.Provider.Model = update.Model
+	cfg.Provider.CredentialEnv = update.CredentialEnv
+	if update.CredentialEnv != "" {
+		cfg.Provider.CredentialKey = ""
+	}
+	cfg.DefaultModel = cfg.Provider.Name + ":" + cfg.Provider.Model
+	cfg.Agent.ContextBudgetChars = update.ContextBudgetChars
+	cfg.Agent.MaxTurns = update.MaxTurns
 	cfg.Agent.ParallelTools = update.ParallelTools
 	cfg.Agent.LLMSchedule = update.LLMSchedule && update.ParallelTools
+	switch update.ApprovalMode {
+	case "ask":
+		cfg.Permissions.Read, cfg.Permissions.Write, cfg.Permissions.Shell, cfg.Permissions.Network = "allow", "ask", "ask", "ask"
+	case "manual":
+		cfg.Permissions.Read, cfg.Permissions.Write, cfg.Permissions.Shell, cfg.Permissions.Network = "ask", "ask", "ask", "ask"
+	case "full":
+		cfg.Permissions.Read, cfg.Permissions.Write, cfg.Permissions.Shell, cfg.Permissions.Network = "allow", "allow", "allow", "allow"
+	default:
+		return config.Config{}, errors.New("approval mode must be ask, manual, or full")
+	}
+	if err := config.Validate(cfg, false); err != nil {
+		return config.Config{}, err
+	}
 	path := config.UserConfigPath(s.data.Base)
 	if path == "" || s.data.Base == "" {
 		return config.Config{}, errors.New("user config path is unavailable")
@@ -170,8 +259,21 @@ func (s *Service) UpdateSettings(_ context.Context, update SettingsUpdate) (conf
 	s.config.Config = cfg
 	if s.composition != nil {
 		s.composition.Config.Config = cfg
+		s.composition.Permissions = permissionsFromConfig(cfg)
+		s.composition.Context.BudgetChars = cfg.Agent.ContextBudgetChars
+		s.composition.Context.ToolResultChars = cfg.Agent.ToolResultChars
 	}
 	return cfg, nil
+}
+
+func approvalModeFromConfig(cfg config.Config) string {
+	if cfg.Permissions.Read == "allow" && cfg.Permissions.Write == "allow" && cfg.Permissions.Shell == "allow" && cfg.Permissions.Network == "allow" {
+		return "full"
+	}
+	if cfg.Permissions.Read == "ask" {
+		return "manual"
+	}
+	return "ask"
 }
 
 // ConversationSnapshot 是桌面端断线重连用的只读快照：仅含已持久化数据，
@@ -206,6 +308,15 @@ func (s *Service) LoadConversation(ctx context.Context, sessionID string) (Conve
 func (s *Service) SendMessage(ctx context.Context, sessionID, content, providerName, modelName string) (storage.AgentTurn, error) {
 	if s.db == nil || s.sessions == nil {
 		return storage.AgentTurn{}, errors.New("application is not initialized")
+	}
+	if providerName == "" {
+		providerName = s.config.Config.Provider.Name
+	}
+	if modelName == "" {
+		modelName = s.config.Config.Provider.Model
+	}
+	if err := s.db.UpdateSessionProviderModel(ctx, sessionID, providerName, modelName); err != nil {
+		return storage.AgentTurn{}, err
 	}
 	_, turn, err := s.db.CreateTurnWithUserMessage(ctx, sessionID, content, providerName, modelName)
 	if err != nil {

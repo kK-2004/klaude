@@ -78,4 +78,24 @@ func TestSaveAndReloadParallelFlags(t *testing.T) {
 	}
 }
 
-
+func TestSaveNeverPersistsPlaintextAPIKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	cfg := Defaults()
+	cfg.Provider.APIKey = "super-secret-value"
+	cfg.Provider.CredentialKey = "model-test"
+	cfg.Provider.CredentialEnv = ""
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "super-secret-value") {
+		t.Fatal("plaintext API key was written to config")
+	}
+	loaded := Load(path, "")
+	if loaded.Config.Provider.CredentialKey != "model-test" || loaded.Config.Provider.CredentialEnv != "" {
+		t.Fatalf("credential reference = %+v", loaded.Config.Provider)
+	}
+}

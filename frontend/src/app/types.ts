@@ -1,5 +1,6 @@
 import type { Message } from '../types/backend'
 import type { Capability, FileChange, FileEntry, Project, Session } from '../types/backend'
+import type { ApprovalMode, ModelCatalog, ModelConnectionResult, ModelProfileInput } from '../lib/backend'
 
 export type AppPage = 'home' | 'pull-requests' | 'sites' | 'scheduled' | 'plugins' | 'settings'
 export type AppState = 'loading' | 'ready' | 'diagnostic' | 'fatal'
@@ -29,11 +30,11 @@ export type AppController = {
   selectedChange?: FileChange
   setSelectedChange: (change?: FileChange) => void
   model: string
-  setModel: (value: string) => void
-  endpoint: string
-  setEndpoint: (value: string) => void
-  credentialEnv: string
-  setCredentialEnv: (value: string) => void
+  modelCatalog: ModelCatalog
+  selectModelProfile: (profileId: string) => Promise<boolean>
+  saveModelProfile: (input: ModelProfileInput) => Promise<ModelCatalog | undefined>
+  testModelConnection: (input: ModelProfileInput) => Promise<ModelConnectionResult>
+  openModelSettings: () => void
   contextLimit: string
   setContextLimit: (value: string) => void
   turnLimit: string
@@ -42,6 +43,9 @@ export type AppController = {
   setParallelTools: (value: boolean) => void
   llmSchedule: boolean
   setLLMSchedule: (value: boolean) => void
+  approvalMode: ApprovalMode
+  setApprovalMode: (value: ApprovalMode) => void
+  applyApprovalMode: (value: ApprovalMode) => Promise<boolean>
   saveSettings: () => Promise<void>
   turnStatus: string
   usage: { input?: number; output?: number }

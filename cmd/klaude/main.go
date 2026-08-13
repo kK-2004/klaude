@@ -9,6 +9,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
 func main() {
@@ -25,6 +26,7 @@ func main() {
 			Assets: frontendassets.Files,
 		},
 		BackgroundColour: &options.RGBA{R: 10, G: 14, B: 24, A: 1},
+		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},
 		Bind:             []interface{}{app.NewRPCService(service)},
 		OnStartup:        service.Startup,
 		OnShutdown:       service.Shutdown,

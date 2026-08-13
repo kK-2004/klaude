@@ -23,8 +23,11 @@ type Provider struct {
 	Endpoint      string
 	Model         string
 	CredentialEnv string
+	APIKey        string
+	APIMode       string
 	HTTPClient    *http.Client
 	MaxTokens     int
+	Temperature   *float64
 	AllowHTTP     bool
 }
 
@@ -39,7 +42,19 @@ func New(cfg config.ProviderConfig) (*Provider, error) {
 	if cfg.Model == "" {
 		return nil, errors.New("openai provider: model is empty")
 	}
-	return &Provider{Endpoint: strings.TrimRight(cfg.Endpoint, "/"), Model: cfg.Model, CredentialEnv: cfg.CredentialEnv, HTTPClient: http.DefaultClient}, nil
+	mode := cfg.APIMode
+	if mode == "" {
+		mode = "chat_completions"
+	}
+	if mode != "chat_completions" && mode != "responses" {
+		return nil, errors.New("openai provider: API mode must be chat_completions or responses")
+	}
+	var temperature *float64
+	if cfg.Temperature >= 0 {
+		value := cfg.Temperature
+		temperature = &value
+	}
+	return &Provider{Endpoint: strings.TrimRight(cfg.Endpoint, "/"), Model: cfg.Model, CredentialEnv: cfg.CredentialEnv, APIKey: cfg.APIKey, APIMode: mode, HTTPClient: http.DefaultClient, MaxTokens: cfg.MaxOutputTokens, Temperature: temperature}, nil
 }
 
 func isLocalHTTP(endpoint string) bool {
@@ -47,12 +62,17 @@ func isLocalHTTP(endpoint string) bool {
 }
 
 type requestBody struct {
-	Model       string                 `json:"model"`
-	Messages    []model.Message        `json:"messages"`
-	Tools       []model.ToolDefinition `json:"tools,omitempty"`
-	Stream      bool                   `json:"stream"`
-	MaxTokens   int                    `json:"max_tokens,omitempty"`
-	Temperature *float64               `json:"temperature,omitempty"`
+	Model       string          `json:"model"`
+	Messages    []model.Message `json:"messages"`
+	Tools       []openAITool    `json:"tools,omitempty"`
+	Stream      bool            `json:"stream"`
+	MaxTokens   int             `json:"max_tokens,omitempty"`
+	Temperature *float64        `json:"temperature,omitempty"`
+}
+
+type openAITool struct {
+	Type     string               `json:"type"`
+	Function model.ToolDefinition `json:"function"`
 }
 
 type sseChunk struct {
@@ -89,7 +109,7 @@ type assembledCall struct {
 }
 
 func (p *Provider) Stream(ctx context.Context, request model.Request) (<-chan model.Event, error) {
-	credential, err := config.ResolveCredential(p.CredentialEnv)
+	credential, err := p.credential()
 	if err != nil {
 		return nil, &model.Error{Code: "missing_credential", Message: err.Error(), Cause: err}
 	}
@@ -97,7 +117,14 @@ func (p *Provider) Stream(ctx context.Context, request model.Request) (<-chan mo
 	if modelName == "" {
 		modelName = p.Model
 	}
-	body, err := json.Marshal(requestBody{Model: modelName, Messages: request.Messages, Tools: request.Tools, Stream: true, MaxTokens: chooseMax(request.MaxTokens, p.MaxTokens), Temperature: request.Temperature})
+	if p.APIMode == "responses" {
+		return p.streamResponses(ctx, request, modelName, credential)
+	}
+	temperature := request.Temperature
+	if temperature == nil {
+		temperature = p.Temperature
+	}
+	body, err := json.Marshal(requestBody{Model: modelName, Messages: request.Messages, Tools: openAITools(request.Tools), Stream: true, MaxTokens: chooseMax(request.MaxTokens, p.MaxTokens), Temperature: temperature})
 	if err != nil {
 		return nil, &model.Error{Code: "encode_request", Message: "could not encode model request", Cause: err}
 	}
@@ -125,6 +152,21 @@ func (p *Provider) Stream(ctx context.Context, request model.Request) (<-chan mo
 	stream := make(chan model.Event, 16)
 	go func() { defer close(stream); parseStream(ctx, response.Body, stream) }()
 	return stream, nil
+}
+
+func (p *Provider) credential() (string, error) {
+	if strings.TrimSpace(p.APIKey) != "" {
+		return strings.TrimSpace(p.APIKey), nil
+	}
+	return config.ResolveCredential(p.CredentialEnv)
+}
+
+func openAITools(definitions []model.ToolDefinition) []openAITool {
+	result := make([]openAITool, 0, len(definitions))
+	for _, definition := range definitions {
+		result = append(result, openAITool{Type: "function", Function: definition})
+	}
+	return result
 }
 
 // parseStream 按 index 拼装增量 tool_calls；收到 [DONE] 时补发尚未结束的 ToolCallEnd。

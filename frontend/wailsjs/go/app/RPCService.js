@@ -14,16 +14,16 @@ export function Capabilities() {
   return window['go']['app']['RPCService']['Capabilities']();
 }
 
-export function CreateSession(arg1, arg2, arg3, arg4) {
-  return window['go']['app']['RPCService']['CreateSession'](arg1, arg2, arg3, arg4);
-}
-
 export function CheckoutGitBranch(arg1, arg2, arg3) {
   return window['go']['app']['RPCService']['CheckoutGitBranch'](arg1, arg2, arg3);
 }
 
 export function CreateGitWorktree(arg1, arg2, arg3, arg4) {
   return window['go']['app']['RPCService']['CreateGitWorktree'](arg1, arg2, arg3, arg4);
+}
+
+export function CreateSession(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['RPCService']['CreateSession'](arg1, arg2, arg3, arg4);
 }
 
 export function DeleteGitBranch(arg1, arg2, arg3) {
@@ -54,6 +54,10 @@ export function LoadConversation(arg1) {
   return window['go']['app']['RPCService']['LoadConversation'](arg1);
 }
 
+export function ModelProfiles() {
+  return window['go']['app']['RPCService']['ModelProfiles']();
+}
+
 export function OpenProject(arg1) {
   return window['go']['app']['RPCService']['OpenProject'](arg1);
 }
@@ -66,22 +70,34 @@ export function ResolveApproval(arg1) {
   return window['go']['app']['RPCService']['ResolveApproval'](arg1);
 }
 
-export function SendMessage(arg1, arg2, arg3, arg4) {
-  return window['go']['app']['RPCService']['SendMessage'](arg1, arg2, arg3, arg4);
+export function SaveModelProfile(arg1) {
+  return window['go']['app']['RPCService']['SaveModelProfile'](arg1);
 }
 
 export function SelectDirectory(arg1) {
   return window['go']['app']['RPCService']['SelectDirectory'](arg1);
 }
 
+export function SelectModelProfile(arg1) {
+  return window['go']['app']['RPCService']['SelectModelProfile'](arg1);
+}
+
+export function SendMessage(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['RPCService']['SendMessage'](arg1, arg2, arg3, arg4);
+}
+
 export function Settings() {
   return window['go']['app']['RPCService']['Settings']();
 }
 
-export function UpdateSettings(arg1) {
-  return window['go']['app']['RPCService']['UpdateSettings'](arg1);
+export function TestModelConnection(arg1) {
+  return window['go']['app']['RPCService']['TestModelConnection'](arg1);
 }
 
 export function UndoTurn(arg1) {
   return window['go']['app']['RPCService']['UndoTurn'](arg1);
+}
+
+export function UpdateSettings(arg1) {
+  return window['go']['app']['RPCService']['UpdateSettings'](arg1);
 }

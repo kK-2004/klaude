@@ -14,11 +14,13 @@ import (
 
 // Dispatcher 是工具执行的统一入口：校验参数 → 权限裁决 →（必要时）阻塞等人批 → 真正执行。
 type Dispatcher struct {
-	Registry    *Registry
-	Permissions permission.Engine
-	Approvals   *approval.Manager
-	SessionID   string
-	TurnID      string
+	Registry          *Registry
+	Permissions       permission.Engine
+	Approvals         *approval.Manager
+	SessionID         string
+	TurnID            string
+	ApprovalRequested func(context.Context, approval.Request) error
+	ApprovalResolved  func(context.Context) error
 }
 
 func (d Dispatcher) Dispatch(ctx context.Context, name string, arguments json.RawMessage) (Result, error) {
@@ -44,15 +46,27 @@ func (d Dispatcher) Dispatch(ctx context.Context, name string, arguments json.Ra
 		return Result{ErrorCode: "permission_denied", Content: reason}, nil
 	}
 	// Ask / RequiresApproval：创建审批请求并阻塞，直到用户批准或拒绝。
-	if decision == permission.Ask || definition.Metadata.RequiresApproval {
+	// 用户明确选择“完全允许”时跳过工具元数据上的常规审批，
+	// 但 Evaluate 中的工作区边界和硬拒绝规则仍然生效。
+	if decision == permission.Ask || (definition.Metadata.RequiresApproval && !d.Permissions.FullAccess) {
 		if d.Approvals == nil {
 			return Result{ErrorCode: "approval_unavailable"}, errors.New("approval manager is not configured")
 		}
 		summary := trace.RedactString(string(arguments))
 		pending := d.Approvals.Create(approval.Request{SessionID: d.SessionID, TurnID: d.TurnID, ToolName: name, Summary: summary, Risk: risk(definition.Metadata), RequestHash: approval.Hash(summary)})
+		if d.ApprovalRequested != nil {
+			if err := d.ApprovalRequested(ctx, pending); err != nil {
+				return Result{ErrorCode: "approval_unavailable"}, err
+			}
+		}
 		resolution, err := d.Approvals.Wait(ctx, pending.ID)
 		if err != nil {
 			return Result{ErrorCode: "approval_cancelled"}, err
+		}
+		if d.ApprovalResolved != nil {
+			if err := d.ApprovalResolved(ctx); err != nil {
+				return Result{ErrorCode: "approval_unavailable"}, err
+			}
 		}
 		if resolution.Status != approval.Approved {
 			return Result{ErrorCode: "permission_rejected", Content: "user rejected the operation"}, nil

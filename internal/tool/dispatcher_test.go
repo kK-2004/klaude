@@ -34,3 +34,23 @@ func TestDispatcherWaitsForApproval(t *testing.T) {
 		t.Fatalf("result=%+v", result)
 	}
 }
+
+func TestDispatcherFullAccessBypassesRoutineApproval(t *testing.T) {
+	registry := NewRegistry()
+	_ = registry.Register(approvalTool{})
+	dispatcher := Dispatcher{Registry: registry, Permissions: permission.Engine{Read: permission.Allow, Write: permission.Allow, Shell: permission.Allow, FullAccess: true}}
+	result, err := dispatcher.Dispatch(context.Background(), "approval_test", json.RawMessage(`{"path":"main.go"}`))
+	if err != nil || !result.Success {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+}
+
+type approvalTool struct{}
+
+func (approvalTool) Definition() Definition {
+	return Definition{Name: "approval_test", Parameters: objectSchema(map[string]any{"path": map[string]any{"type": "string"}}, "path"), Metadata: Metadata{RequiresApproval: true}}
+}
+
+func (approvalTool) Execute(context.Context, json.RawMessage) (Result, error) {
+	return Result{Content: "ok", Success: true}, nil
+}

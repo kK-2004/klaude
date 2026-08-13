@@ -3,8 +3,8 @@
 import {filesystem} from '../models';
 import {project} from '../models';
 import {app} from '../models';
-import {config} from '../models';
 import {git} from '../models';
+import {config} from '../models';
 
 export function BrowseProject(arg1:string,arg2:string):Promise<Array<filesystem.Entry>>;
 
@@ -12,11 +12,11 @@ export function CancelAgent(arg1:string):Promise<boolean>;
 
 export function Capabilities():Promise<Array<project.Capability>>;
 
-export function CreateSession(arg1:string,arg2:string,arg3:string,arg4:string):Promise<app.SessionDTO>;
-
 export function CheckoutGitBranch(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function CreateGitWorktree(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
+
+export function CreateSession(arg1:string,arg2:string,arg3:string,arg4:string):Promise<app.SessionDTO>;
 
 export function DeleteGitBranch(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
@@ -32,18 +32,26 @@ export function ListSessions(arg1:string):Promise<Array<app.SessionDTO>>;
 
 export function LoadConversation(arg1:string):Promise<app.ConversationSnapshotDTO>;
 
+export function ModelProfiles():Promise<app.ModelCatalog>;
+
 export function OpenProject(arg1:string):Promise<app.ProjectDTO>;
 
 export function RenameSession(arg1:string,arg2:string):Promise<void>;
 
 export function ResolveApproval(arg1:app.ApprovalResolution):Promise<void>;
 
-export function SendMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<app.AgentTurnDTO>;
+export function SaveModelProfile(arg1:app.ModelProfileInput):Promise<app.ModelCatalog>;
 
 export function SelectDirectory(arg1:string):Promise<string>;
 
+export function SelectModelProfile(arg1:string):Promise<app.ModelCatalog>;
+
+export function SendMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<app.AgentTurnDTO>;
+
 export function Settings():Promise<config.Config>;
 
-export function UpdateSettings(arg1:app.SettingsUpdate):Promise<config.Config>;
+export function TestModelConnection(arg1:app.ModelProfileInput):Promise<app.ModelConnectionResult>;
 
 export function UndoTurn(arg1:string):Promise<void>;
+
+export function UpdateSettings(arg1:app.SettingsUpdate):Promise<config.Config>;

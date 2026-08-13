@@ -143,7 +143,7 @@ func (r *RPCService) CreateGitWorktree(root, startRef, branchName, targetPath st
 func (r *RPCService) SelectDirectory(defaultDirectory string) (string, error) {
 	return runtime.OpenDirectoryDialog(r.service.runtimeContext(), runtime.OpenDialogOptions{
 		DefaultDirectory: defaultDirectory,
-		Title:            "选择 Worktree 目录",
+		Title:            "选择目录",
 	})
 }
 
@@ -168,6 +168,22 @@ func (r *RPCService) Settings() config.Config { return r.service.Settings() }
 
 func (r *RPCService) UpdateSettings(update SettingsUpdate) (config.Config, error) {
 	return r.service.UpdateSettings(context.Background(), update)
+}
+
+func (r *RPCService) ModelProfiles() (ModelCatalog, error) {
+	return r.service.ModelProfiles(context.Background())
+}
+
+func (r *RPCService) SaveModelProfile(input ModelProfileInput) (ModelCatalog, error) {
+	return r.service.SaveModelProfile(context.Background(), input)
+}
+
+func (r *RPCService) SelectModelProfile(profileID string) (ModelCatalog, error) {
+	return r.service.SelectModelProfile(context.Background(), profileID)
+}
+
+func (r *RPCService) TestModelConnection(input ModelProfileInput) (ModelConnectionResult, error) {
+	return r.service.TestModelConnection(context.Background(), input)
 }
 
 func mapProject(project storage.Project) ProjectDTO {

@@ -29,13 +29,17 @@ type Rule struct {
 
 // Engine 按「越界/黑名单 → 显式规则 → 读写/Shell 默认策略」裁决一次工具请求。
 type Engine struct {
-	Read  Decision
-	Write Decision
-	Shell Decision
-	Rules []Rule
+	Read       Decision
+	Write      Decision
+	Shell      Decision
+	Network    Decision
+	FullAccess bool
+	Rules      []Rule
 }
 
-func NewDefault() Engine { return Engine{Read: Allow, Write: Ask, Shell: Ask, Rules: nil} }
+func NewDefault() Engine {
+	return Engine{Read: Allow, Write: Ask, Shell: Ask, Network: Ask, Rules: nil}
+}
 
 func (e Engine) Evaluate(request Request) (Decision, string) {
 	if request.Outside {

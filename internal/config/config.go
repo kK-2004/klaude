@@ -32,12 +32,19 @@ type AgentConfig struct {
 }
 
 type ProviderConfig struct {
-	Name              string `toml:"name"`
-	Endpoint          string `toml:"endpoint"`
-	Model             string `toml:"model"`
-	CredentialEnv     string `toml:"credential_env"`
-	AllowHTTPForLocal bool   `toml:"allow_http_for_local"`
-	SupportsTools     bool   `toml:"supports_tools"`
+	Name              string  `toml:"name"`
+	Protocol          string  `toml:"protocol"`
+	APIMode           string  `toml:"api_mode"`
+	Endpoint          string  `toml:"endpoint"`
+	Model             string  `toml:"model"`
+	CredentialEnv     string  `toml:"credential_env"`
+	CredentialKey     string  `toml:"credential_key"`
+	APIKey            string  `toml:"-" json:"-"`
+	ContextWindow     int     `toml:"context_window"`
+	MaxOutputTokens   int     `toml:"max_output_tokens"`
+	Temperature       float64 `toml:"temperature"`
+	AllowHTTPForLocal bool    `toml:"allow_http_for_local"`
+	SupportsTools     bool    `toml:"supports_tools"`
 }
 
 type PermissionConfig struct {
@@ -65,7 +72,7 @@ func Defaults() Config {
 		DefaultModel: "openai:gpt-4o-mini",
 		UI:           UIConfig{Theme: "system"},
 		Agent:        AgentConfig{MaxTurns: 50, ContextBudgetChars: 120_000, ToolResultChars: 24_000, ShellTimeoutSec: 120},
-		Provider:     ProviderConfig{Name: "openai-compatible", Endpoint: "https://api.openai.com/v1", Model: "gpt-4o-mini", CredentialEnv: "OPENAI_API_KEY", SupportsTools: true},
+		Provider:     ProviderConfig{Name: "openai-compatible", Protocol: "openai", APIMode: "chat_completions", Endpoint: "https://api.openai.com/v1", Model: "gpt-4o-mini", CredentialEnv: "OPENAI_API_KEY", ContextWindow: 128_000, MaxOutputTokens: 16_384, Temperature: 0.2, SupportsTools: true},
 		Permissions:  PermissionConfig{Read: "allow", Write: "ask", Shell: "ask", Network: "ask", ShellRules: map[string]string{}},
 	}
 }
@@ -152,9 +159,33 @@ func Validate(cfg Config, project bool) error {
 		return errors.New("agent.shell_timeout_sec is out of range")
 	}
 	if cfg.Provider.Endpoint != "" {
-		if !strings.HasPrefix(cfg.Provider.Endpoint, "https://") && !(cfg.Provider.AllowHTTPForLocal && strings.HasPrefix(cfg.Provider.Endpoint, "http://localhost")) {
+		if !strings.HasPrefix(cfg.Provider.Endpoint, "https://") && !(cfg.Provider.AllowHTTPForLocal && (strings.HasPrefix(cfg.Provider.Endpoint, "http://localhost") || strings.HasPrefix(cfg.Provider.Endpoint, "http://127.0.0.1") || strings.HasPrefix(cfg.Provider.Endpoint, "http://[::1]"))) {
 			return errors.New("provider.endpoint must use https, except explicit localhost development mode")
 		}
+	}
+	if cfg.Provider.Protocol != "" && cfg.Provider.Protocol != "openai" && cfg.Provider.Protocol != "anthropic" {
+		return errors.New("provider.protocol must be openai or anthropic")
+	}
+	if cfg.Provider.APIMode != "" && cfg.Provider.APIMode != "chat_completions" && cfg.Provider.APIMode != "responses" && cfg.Provider.APIMode != "messages" {
+		return errors.New("provider.api_mode must be chat_completions, responses, or messages")
+	}
+	if cfg.Provider.Protocol == "anthropic" && cfg.Provider.APIMode != "" && cfg.Provider.APIMode != "messages" {
+		return errors.New("anthropic protocol requires messages api mode")
+	}
+	if cfg.Provider.Protocol == "openai" && cfg.Provider.APIMode == "messages" {
+		return errors.New("openai protocol requires chat_completions or responses api mode")
+	}
+	if cfg.Provider.ContextWindow < 0 || cfg.Provider.ContextWindow > 10_000_000 {
+		return errors.New("provider.context_window is out of range")
+	}
+	if cfg.Provider.MaxOutputTokens < 0 || cfg.Provider.MaxOutputTokens > 1_000_000 {
+		return errors.New("provider.max_output_tokens is out of range")
+	}
+	if cfg.Provider.Temperature < 0 || cfg.Provider.Temperature > 2 {
+		return errors.New("provider.temperature must be between 0 and 2")
+	}
+	if project && cfg.Provider.CredentialKey != "" {
+		return errors.New("project config cannot select a keychain credential")
 	}
 	if project && cfg.Provider.CredentialEnv != "" && strings.Contains(strings.ToLower(cfg.Provider.CredentialEnv), "key=") {
 		return errors.New("project config cannot persist plaintext credentials")
@@ -202,14 +233,32 @@ func merge(dst *Config, patch Config, project bool, meta toml.MetaData) {
 	if patch.Provider.Name != "" {
 		dst.Provider.Name = patch.Provider.Name
 	}
+	if patch.Provider.Protocol != "" {
+		dst.Provider.Protocol = patch.Provider.Protocol
+	}
+	if patch.Provider.APIMode != "" {
+		dst.Provider.APIMode = patch.Provider.APIMode
+	}
 	if patch.Provider.Endpoint != "" {
 		dst.Provider.Endpoint = patch.Provider.Endpoint
 	}
 	if patch.Provider.Model != "" {
 		dst.Provider.Model = patch.Provider.Model
 	}
-	if patch.Provider.CredentialEnv != "" {
+	if meta.IsDefined("provider", "credential_env") {
 		dst.Provider.CredentialEnv = patch.Provider.CredentialEnv
+	}
+	if meta.IsDefined("provider", "credential_key") {
+		dst.Provider.CredentialKey = patch.Provider.CredentialKey
+	}
+	if meta.IsDefined("provider", "context_window") {
+		dst.Provider.ContextWindow = patch.Provider.ContextWindow
+	}
+	if meta.IsDefined("provider", "max_output_tokens") {
+		dst.Provider.MaxOutputTokens = patch.Provider.MaxOutputTokens
+	}
+	if meta.IsDefined("provider", "temperature") {
+		dst.Provider.Temperature = patch.Provider.Temperature
 	}
 	if !project {
 		dst.Provider.AllowHTTPForLocal = patch.Provider.AllowHTTPForLocal

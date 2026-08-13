@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  AtSign, Bell, Check, ChevronDown, Clock, Folder, FolderOpen, GitPullRequest,
+  AtSign, Check, ChevronDown, Folder, FolderOpen, GitPullRequest,
   LayoutGrid, ListChecks, MessageSquare, Moon, PanelLeft, Plus, Search, Settings,
   Sun, User,
 } from 'lucide-react'
@@ -12,7 +12,6 @@ const nav: { id: AppPage; label: string; icon: typeof Plus }[] = [
   { id: 'home', label: '新对话', icon: Plus },
   { id: 'pull-requests', label: '拉取请求', icon: GitPullRequest },
   { id: 'sites', label: '站点', icon: LayoutGrid },
-  { id: 'scheduled', label: '已安排', icon: Clock },
   { id: 'plugins', label: '插件', icon: AtSign },
 ]
 
@@ -20,7 +19,7 @@ export function Sidebar() {
   const {
     page, setPage, startNewChat, project, projects, sessions, session,
     selectProject, selectSession, renameCurrentSession, openProject,
-    diagnostic, setupDone, setupTotal, model, messages, files, capabilities, setSidebarOpen,
+    setupDone, setupTotal, model, messages, files, capabilities, setSidebarOpen,
   } = useApp()
   const theme = useThemeStore((state) => state.theme)
   const setTheme = useThemeStore((state) => state.setTheme)
@@ -88,9 +87,6 @@ export function Sidebar() {
             onClick={() => setSearchOpen((open) => !open)}
           >
             <Search size={16} strokeWidth={1.75} />
-          </button>
-          <button type="button" className={`icon-btn ${diagnostic ? 'has-dot' : ''}`} aria-label="通知" title={diagnostic || '暂无通知'}>
-            <Bell size={16} strokeWidth={1.75} />
           </button>
         </div>
       </div>
@@ -189,11 +185,13 @@ export function Sidebar() {
             <li className={files.length > 0 || capabilities.length > 0 ? 'done' : ''}><Check size={12} strokeWidth={2} /> 检查工作区</li>
           </ul>
         )}
-        <button type="button" className="user-row" onClick={() => setPage('settings')}>
+        <div className="user-row">
           <span className="avatar"><User size={14} strokeWidth={1.75} /></span>
           <span className="user-name">Klaude</span>
-          <Settings size={15} strokeWidth={1.75} />
-        </button>
+          <button type="button" className="icon-btn user-settings" aria-label="设置" onClick={() => setPage('settings')}>
+            <Settings size={15} strokeWidth={1.75} />
+          </button>
+        </div>
       </div>
     </aside>
   )

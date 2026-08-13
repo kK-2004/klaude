@@ -9,6 +9,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
 func main() {
@@ -18,6 +19,7 @@ func main() {
 		Title: "Klaude", Width: 1440, Height: 900, MinWidth: 760, MinHeight: 560,
 		AssetServer:      &assetserver.Options{Assets: frontendassets.Files},
 		BackgroundColour: &options.RGBA{R: 247, G: 247, B: 248, A: 1},
+		Mac:              &mac.Options{TitleBar: mac.TitleBarHiddenInset()},
 		Bind:             []interface{}{app.NewRPCService(service)}, OnStartup: service.Startup, OnShutdown: service.Shutdown,
 	}); err != nil {
 		logger.Error("failed to run Klaude", "error", err)

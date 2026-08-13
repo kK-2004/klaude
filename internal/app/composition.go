@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"sort"
 
 	"github.com/klaude/klaude/internal/approval"
 	"github.com/klaude/klaude/internal/config"
@@ -51,12 +52,31 @@ func Build(ctx context.Context, dirs storage.DataDirs, logger *slog.Logger) (*Co
 		}
 	}
 	loaded := config.Load(config.UserConfigPath(dirs.Base), "")
-	composition := &Composition{Data: dirs, DB: db, Config: loaded, Events: event.NewBus(), Approvals: approval.NewManager(), Permissions: permission.NewDefault(), Executor: executor.Local{}, Projects: project.NewManager(db), Sessions: session.NewManager(db), Tools: tool.NewRegistry(), Context: agentcontext.Manager{SystemInstructions: "You are Klaude, a careful coding agent.", BudgetChars: loaded.Config.Agent.ContextBudgetChars, ToolResultChars: loaded.Config.Agent.ToolResultChars}, Logger: logger}
+	composition := &Composition{Data: dirs, DB: db, Config: loaded, Events: event.NewBus(), Approvals: approval.NewManager(), Permissions: permissionsFromConfig(loaded.Config), Executor: executor.Local{}, Projects: project.NewManager(db), Sessions: session.NewManager(db), Tools: tool.NewRegistry(), Context: agentcontext.Manager{SystemInstructions: "You are Klaude, a careful coding agent.", BudgetChars: loaded.Config.Agent.ContextBudgetChars, ToolResultChars: loaded.Config.Agent.ToolResultChars}, Logger: logger}
 	tracePath := dirs.Traces + "/startup.jsonl"
 	if writer, traceErr := trace.Open(tracePath, 10*1024*1024); traceErr == nil {
 		composition.Trace = writer
 	}
 	return composition, nil
+}
+
+func permissionsFromConfig(cfg config.Config) permission.Engine {
+	engine := permission.Engine{
+		Read:    permission.Decision(cfg.Permissions.Read),
+		Write:   permission.Decision(cfg.Permissions.Write),
+		Shell:   permission.Decision(cfg.Permissions.Shell),
+		Network: permission.Decision(cfg.Permissions.Network),
+	}
+	patterns := make([]string, 0, len(cfg.Permissions.ShellRules))
+	for pattern := range cfg.Permissions.ShellRules {
+		patterns = append(patterns, pattern)
+	}
+	sort.Strings(patterns)
+	for _, pattern := range patterns {
+		engine.Rules = append(engine.Rules, permission.Rule{Pattern: pattern, Decision: permission.Decision(cfg.Permissions.ShellRules[pattern])})
+	}
+	engine.FullAccess = engine.Read == permission.Allow && engine.Write == permission.Allow && engine.Shell == permission.Allow && engine.Network == permission.Allow
+	return engine
 }
 
 func (c *Composition) Close() error {

@@ -63,6 +63,7 @@ type Agent struct {
 	Locks       *MutationLocks
 	ScheduleCfg SchedulerConfig
 	ToolMeta    ToolMetaLookup
+	Tools       []model.ToolDefinition
 	Planner     SchedulePlanner
 	mu          sync.Mutex
 }
@@ -107,6 +108,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		if err != nil {
 			return a.fail(ctx, "context_limit", err)
 		}
+		request.Tools = a.Tools
 		stream, err := a.streamWithRetry(ctx, request)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || model.IsCancelled(err) {

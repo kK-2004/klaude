@@ -130,6 +130,26 @@ func (d *DB) RenameSession(ctx context.Context, sessionID, title string) error {
 	})
 }
 
+func (d *DB) UpdateSessionProviderModel(ctx context.Context, sessionID, provider, model string) error {
+	if provider == "" || model == "" {
+		return errors.New("storage: provider and model cannot be empty")
+	}
+	return d.WriteTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `UPDATE sessions SET provider=?,model=?,updated_at=? WHERE id=?`, provider, model, unixMillis(time.Now().UTC()), sessionID)
+		if err != nil {
+			return err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
+}
+
 // CreateTurnWithUserMessage 原子创建 running turn + 用户消息，并拒绝同会话已有活跃 turn。
 func (d *DB) CreateTurnWithUserMessage(ctx context.Context, sessionID, content, provider, model string) (Message, AgentTurn, error) {
 	if content == "" {
@@ -342,6 +362,17 @@ func (d *DB) SetSetting(ctx context.Context, setting Setting) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO settings(key,value_json,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at`, setting.Key, setting.ValueJSON, unixMillis(setting.UpdatedAt))
 		return err
 	})
+}
+
+func (d *DB) GetSetting(ctx context.Context, key string) (Setting, error) {
+	var setting Setting
+	var updated int64
+	err := d.SQL.QueryRowContext(ctx, `SELECT key,value_json,updated_at FROM settings WHERE key=?`, key).Scan(&setting.Key, &setting.ValueJSON, &updated)
+	if err != nil {
+		return Setting{}, err
+	}
+	setting.UpdatedAt = timeFromMillis(updated)
+	return setting, nil
 }
 
 func nullableString(value string) any {

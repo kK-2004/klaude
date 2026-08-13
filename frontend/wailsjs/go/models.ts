@@ -1,5 +1,5 @@
 export namespace app {
-	
+
 	export class AgentTurnDTO {
 	    id: string;
 	    sessionId: string;
@@ -8,11 +8,11 @@ export namespace app {
 	    finishedAt?: string;
 	    errorCode?: string;
 	    errorText?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new AgentTurnDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -28,30 +28,16 @@ export namespace app {
 	    approvalId: string;
 	    status: string;
 	    requestHash: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ApprovalResolution(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.approvalId = source["approvalId"];
 	        this.status = source["status"];
 	        this.requestHash = source["requestHash"];
-	    }
-	}
-	export class SettingsUpdate {
-	    parallelTools: boolean;
-	    llmSchedule: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new SettingsUpdate(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.parallelTools = source["parallelTools"];
-	        this.llmSchedule = source["llmSchedule"];
 	    }
 	}
 	export class MessageDTO {
@@ -61,11 +47,11 @@ export namespace app {
 	    role: string;
 	    content: string;
 	    createdAt: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new MessageDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -85,11 +71,11 @@ export namespace app {
 	    status: string;
 	    createdAt: string;
 	    updatedAt: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new SessionDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -106,18 +92,18 @@ export namespace app {
 	    session: SessionDTO;
 	    messages: MessageDTO[];
 	    turns: AgentTurnDTO[];
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ConversationSnapshotDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.session = this.convertValues(source["session"], SessionDTO);
 	        this.messages = this.convertValues(source["messages"], MessageDTO);
 	        this.turns = this.convertValues(source["turns"], AgentTurnDTO);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -148,11 +134,11 @@ export namespace app {
 	    addedLines: number;
 	    deletedLines: number;
 	    createdAt: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new FileChangeDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -172,11 +158,11 @@ export namespace app {
 	    ready: boolean;
 	    product: string;
 	    version: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new HealthResponse(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ready = source["ready"];
@@ -184,130 +170,51 @@ export namespace app {
 	        this.version = source["version"];
 	    }
 	}
-	
-	export class ProjectDTO {
+
+	export class ModelProfile {
 	    id: string;
 	    name: string;
-	    rootPath: string;
-	    gitRoot?: string;
-	    createdAt: string;
-	    updatedAt: string;
-	
+	    providerSpec: string;
+	    apiMode: string;
+	    baseUrl: string;
+	    model: string;
+	    contextWindow: number;
+	    maxOutputTokens: number;
+	    temperature: number;
+	    hasApiKey: boolean;
+
 	    static createFrom(source: any = {}) {
-	        return new ProjectDTO(source);
+	        return new ModelProfile(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
-	        this.rootPath = source["rootPath"];
-	        this.gitRoot = source["gitRoot"];
-	        this.createdAt = source["createdAt"];
-	        this.updatedAt = source["updatedAt"];
+	        this.providerSpec = source["providerSpec"];
+	        this.apiMode = source["apiMode"];
+	        this.baseUrl = source["baseUrl"];
+	        this.model = source["model"];
+	        this.contextWindow = source["contextWindow"];
+	        this.maxOutputTokens = source["maxOutputTokens"];
+	        this.temperature = source["temperature"];
+	        this.hasApiKey = source["hasApiKey"];
 	    }
 	}
+	export class ModelCatalog {
+	    activeId: string;
+	    profiles: ModelProfile[];
 
-}
+	    static createFrom(source: any = {}) {
+	        return new ModelCatalog(source);
+	    }
 
-export namespace config {
-	
-	export class AgentConfig {
-	    MaxTurns: number;
-	    ContextBudgetChars: number;
-	    ToolResultChars: number;
-	    ShellTimeoutSec: number;
-	    ParallelTools: boolean;
-	    LLMSchedule: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new AgentConfig(source);
-	    }
-	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.MaxTurns = source["MaxTurns"];
-	        this.ContextBudgetChars = source["ContextBudgetChars"];
-	        this.ToolResultChars = source["ToolResultChars"];
-	        this.ShellTimeoutSec = source["ShellTimeoutSec"];
-	        this.ParallelTools = source["ParallelTools"];
-	        this.LLMSchedule = source["LLMSchedule"];
+	        this.activeId = source["activeId"];
+	        this.profiles = this.convertValues(source["profiles"], ModelProfile);
 	    }
-	}
-	export class PermissionConfig {
-	    Read: string;
-	    Write: string;
-	    Shell: string;
-	    Network: string;
-	    ShellRules: Record<string, string>;
-	
-	    static createFrom(source: any = {}) {
-	        return new PermissionConfig(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.Read = source["Read"];
-	        this.Write = source["Write"];
-	        this.Shell = source["Shell"];
-	        this.Network = source["Network"];
-	        this.ShellRules = source["ShellRules"];
-	    }
-	}
-	export class ProviderConfig {
-	    Name: string;
-	    Endpoint: string;
-	    Model: string;
-	    CredentialEnv: string;
-	    AllowHTTPForLocal: boolean;
-	    SupportsTools: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new ProviderConfig(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.Name = source["Name"];
-	        this.Endpoint = source["Endpoint"];
-	        this.Model = source["Model"];
-	        this.CredentialEnv = source["CredentialEnv"];
-	        this.AllowHTTPForLocal = source["AllowHTTPForLocal"];
-	        this.SupportsTools = source["SupportsTools"];
-	    }
-	}
-	export class UIConfig {
-	    Theme: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new UIConfig(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.Theme = source["Theme"];
-	    }
-	}
-	export class Config {
-	    DefaultModel: string;
-	    UI: UIConfig;
-	    Agent: AgentConfig;
-	    Provider: ProviderConfig;
-	    Permissions: PermissionConfig;
-	
-	    static createFrom(source: any = {}) {
-	        return new Config(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.DefaultModel = source["DefaultModel"];
-	        this.UI = this.convertValues(source["UI"], UIConfig);
-	        this.Agent = this.convertValues(source["Agent"], AgentConfig);
-	        this.Provider = this.convertValues(source["Provider"], ProviderConfig);
-	        this.Permissions = this.convertValues(source["Permissions"], PermissionConfig);
-	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -326,24 +233,253 @@ export namespace config {
 		    return a;
 		}
 	}
-	
-	
+	export class ModelConnectionResult {
+	    success: boolean;
+	    latencyMs: number;
+	    message: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ModelConnectionResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.latencyMs = source["latencyMs"];
+	        this.message = source["message"];
+	    }
+	}
+
+	export class ModelProfileInput {
+	    id: string;
+	    name: string;
+	    providerSpec: string;
+	    apiMode: string;
+	    baseUrl: string;
+	    model: string;
+	    apiKey: string;
+	    contextWindow: number;
+	    maxOutputTokens: number;
+	    temperature: number;
+
+	    static createFrom(source: any = {}) {
+	        return new ModelProfileInput(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.providerSpec = source["providerSpec"];
+	        this.apiMode = source["apiMode"];
+	        this.baseUrl = source["baseUrl"];
+	        this.model = source["model"];
+	        this.apiKey = source["apiKey"];
+	        this.contextWindow = source["contextWindow"];
+	        this.maxOutputTokens = source["maxOutputTokens"];
+	        this.temperature = source["temperature"];
+	    }
+	}
+	export class ProjectDTO {
+	    id: string;
+	    name: string;
+	    rootPath: string;
+	    gitRoot?: string;
+	    createdAt: string;
+	    updatedAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ProjectDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.rootPath = source["rootPath"];
+	        this.gitRoot = source["gitRoot"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+
+	export class SettingsUpdate {
+	    theme: string;
+	    endpoint: string;
+	    model: string;
+	    credentialEnv: string;
+	    contextBudgetChars: number;
+	    maxTurns: number;
+	    parallelTools: boolean;
+	    llmSchedule: boolean;
+	    approvalMode: string;
+
+	    static createFrom(source: any = {}) {
+	        return new SettingsUpdate(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.theme = source["theme"];
+	        this.endpoint = source["endpoint"];
+	        this.model = source["model"];
+	        this.credentialEnv = source["credentialEnv"];
+	        this.contextBudgetChars = source["contextBudgetChars"];
+	        this.maxTurns = source["maxTurns"];
+	        this.parallelTools = source["parallelTools"];
+	        this.llmSchedule = source["llmSchedule"];
+	        this.approvalMode = source["approvalMode"];
+	    }
+	}
+
+}
+
+export namespace config {
+
+	export class AgentConfig {
+	    MaxTurns: number;
+	    ContextBudgetChars: number;
+	    ToolResultChars: number;
+	    ShellTimeoutSec: number;
+	    ParallelTools: boolean;
+	    LLMSchedule: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.MaxTurns = source["MaxTurns"];
+	        this.ContextBudgetChars = source["ContextBudgetChars"];
+	        this.ToolResultChars = source["ToolResultChars"];
+	        this.ShellTimeoutSec = source["ShellTimeoutSec"];
+	        this.ParallelTools = source["ParallelTools"];
+	        this.LLMSchedule = source["LLMSchedule"];
+	    }
+	}
+	export class PermissionConfig {
+	    Read: string;
+	    Write: string;
+	    Shell: string;
+	    Network: string;
+	    ShellRules: Record<string, string>;
+
+	    static createFrom(source: any = {}) {
+	        return new PermissionConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Read = source["Read"];
+	        this.Write = source["Write"];
+	        this.Shell = source["Shell"];
+	        this.Network = source["Network"];
+	        this.ShellRules = source["ShellRules"];
+	    }
+	}
+	export class ProviderConfig {
+	    Name: string;
+	    Protocol: string;
+	    APIMode: string;
+	    Endpoint: string;
+	    Model: string;
+	    CredentialEnv: string;
+	    CredentialKey: string;
+	    ContextWindow: number;
+	    MaxOutputTokens: number;
+	    Temperature: number;
+	    AllowHTTPForLocal: boolean;
+	    SupportsTools: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new ProviderConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Name = source["Name"];
+	        this.Protocol = source["Protocol"];
+	        this.APIMode = source["APIMode"];
+	        this.Endpoint = source["Endpoint"];
+	        this.Model = source["Model"];
+	        this.CredentialEnv = source["CredentialEnv"];
+	        this.CredentialKey = source["CredentialKey"];
+	        this.ContextWindow = source["ContextWindow"];
+	        this.MaxOutputTokens = source["MaxOutputTokens"];
+	        this.Temperature = source["Temperature"];
+	        this.AllowHTTPForLocal = source["AllowHTTPForLocal"];
+	        this.SupportsTools = source["SupportsTools"];
+	    }
+	}
+	export class UIConfig {
+	    Theme: string;
+
+	    static createFrom(source: any = {}) {
+	        return new UIConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Theme = source["Theme"];
+	    }
+	}
+	export class Config {
+	    DefaultModel: string;
+	    UI: UIConfig;
+	    Agent: AgentConfig;
+	    Provider: ProviderConfig;
+	    Permissions: PermissionConfig;
+
+	    static createFrom(source: any = {}) {
+	        return new Config(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.DefaultModel = source["DefaultModel"];
+	        this.UI = this.convertValues(source["UI"], UIConfig);
+	        this.Agent = this.convertValues(source["Agent"], AgentConfig);
+	        this.Provider = this.convertValues(source["Provider"], ProviderConfig);
+	        this.Permissions = this.convertValues(source["Permissions"], PermissionConfig);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+
 
 }
 
 export namespace filesystem {
-	
+
 	export class Entry {
 	    name: string;
 	    path: string;
 	    dir: boolean;
 	    size: number;
 	    externalSymlink: boolean;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new Entry(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -374,7 +510,6 @@ export namespace git {
 	        this.current = source["current"];
 	    }
 	}
-
 	export class BranchSnapshot {
 	    current: string;
 	    branches: BranchInfo[];
@@ -392,9 +527,20 @@ export namespace git {
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) return a;
-		    if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    if ("object" === typeof a) return asMap ? a : new classs(a);
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
 		    return a;
 		}
 	}
@@ -402,16 +548,16 @@ export namespace git {
 }
 
 export namespace project {
-	
+
 	export class Capability {
 	    name: string;
 	    available: boolean;
 	    detail: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new Capability(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];

@@ -2,9 +2,26 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { backend } from '../lib/backend'
 import { demoFiles, demoSession } from '../lib/demo'
 import { useAgentStore } from '../stores/agent'
+import { useThemeStore } from '../stores/theme'
 import { useWorkspaceStore } from '../stores/workspace'
 import type { AgentEvent, FileChange, Project, Session } from '../types/backend'
 import type { AppController, AppPage, AppState, PendingApproval } from './types'
+import type { ApprovalMode, BackendSettings, ModelCatalog, ModelConnectionResult, ModelProfileInput, SettingsUpdate } from '../lib/backend'
+
+const previewModelCatalog: ModelCatalog = {
+  activeId: 'preview-openai',
+  profiles: [
+    { id: 'preview-openai', name: 'GPT-5.6-Sol', providerSpec: 'openai', apiMode: 'responses', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.6-sol', contextWindow: 400000, maxOutputTokens: 32768, temperature: 0.2, hasApiKey: false },
+    { id: 'preview-anthropic', name: 'Claude Sonnet', providerSpec: 'anthropic', apiMode: 'messages', baseUrl: 'https://api.anthropic.com/v1', model: 'claude-sonnet', contextWindow: 200000, maxOutputTokens: 16384, temperature: 0.2, hasApiKey: false },
+  ],
+}
+
+function approvalModeFromSettings(settings?: BackendSettings): ApprovalMode {
+  const permissions = settings?.Permissions
+  if (permissions?.Read === 'allow' && permissions?.Write === 'allow' && permissions?.Shell === 'allow' && permissions?.Network === 'allow') return 'full'
+  if (permissions?.Read === 'ask') return 'manual'
+  return 'ask'
+}
 
 export function useAppController(): AppController {
   const [appState, setAppState] = useState<AppState>('loading')
@@ -17,12 +34,14 @@ export function useAppController(): AppController {
   const [changes, setChanges] = useState<FileChange[]>([])
   const [selectedChange, setSelectedChange] = useState<FileChange>()
   const [model, setModel] = useState('not configured')
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalog>(previewModelCatalog)
   const [endpoint, setEndpoint] = useState('https://api.openai.com/v1')
   const [credentialEnv, setCredentialEnv] = useState('OPENAI_API_KEY')
   const [contextLimit, setContextLimit] = useState('120000')
   const [turnLimit, setTurnLimit] = useState('50')
   const [parallelTools, setParallelTools] = useState(false)
   const [llmSchedule, setLLMSchedule] = useState(false)
+  const [approvalMode, setApprovalMode] = useState<ApprovalMode>('ask')
   const [turnStatus, setTurnStatus] = useState('idle')
   const [usage, setUsage] = useState<{ input?: number; output?: number }>({})
 
@@ -55,14 +74,23 @@ export function useAppController(): AppController {
         setDiagnostic('应用以只读诊断模式启动。')
         return
       }
-      const [recentProjects, caps, settings] = await Promise.all([backend.listProjects(), backend.capabilities(), backend.settings().catch(() => undefined)])
+      const [recentProjects, caps, settings, catalog] = await Promise.all([
+        backend.listProjects(), backend.capabilities(), backend.settings().catch(() => undefined), backend.modelProfiles().catch(() => undefined),
+      ])
+      if (catalog) {
+        setModelCatalog(catalog)
+        const activeProfile = catalog.profiles.find((profile) => profile.id === catalog.activeId)
+        if (activeProfile) setModel(activeProfile.model)
+      }
       if (settings?.Provider?.Endpoint) setEndpoint(settings.Provider.Endpoint)
       if (settings?.Provider?.Model) setModel(settings.Provider.Model)
-      if (settings?.Provider?.CredentialEnv) setCredentialEnv(settings.Provider.CredentialEnv)
+      setCredentialEnv(settings?.Provider?.CredentialEnv ?? '')
       if (settings?.Agent?.ContextBudgetChars) setContextLimit(String(settings.Agent.ContextBudgetChars))
       if (settings?.Agent?.MaxTurns) setTurnLimit(String(settings.Agent.MaxTurns))
       setParallelTools(Boolean(settings?.Agent?.ParallelTools))
       setLLMSchedule(Boolean(settings?.Agent?.LLMSchedule))
+      setApprovalMode(approvalModeFromSettings(settings))
+      if (settings?.UI?.Theme === 'light' || settings?.UI?.Theme === 'dark') useThemeStore.getState().setTheme(settings.UI.Theme)
       setProjects(recentProjects)
       setCapabilities(caps)
       const selected = recentProjects[0]
@@ -75,7 +103,6 @@ export function useAppController(): AppController {
           setSession(selectedSession)
           const snapshot = await backend.loadConversation(selectedSession.id)
           setMessages(snapshot.messages)
-          setModel(selectedSession.model)
         }
         setFiles(await backend.browseProject(selected.rootPath, '.'))
       }
@@ -83,6 +110,8 @@ export function useAppController(): AppController {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (message.includes('unavailable') || message.includes('Wails')) {
+        setModelCatalog(previewModelCatalog)
+        setModel(previewModelCatalog.profiles[0].model)
         setSession(demoSession)
         setSessions([demoSession])
         setFiles(demoFiles)
@@ -109,6 +138,7 @@ export function useAppController(): AppController {
       if (event.type.endsWith('finished')) { setTurnStatus('completed'); setRunning(false) }
       if (event.type.endsWith('cancelled')) { setTurnStatus('cancelled'); setRunning(false) }
       if (event.type.endsWith('failed')) { setTurnStatus('failed'); setRunning(false) }
+      if (event.type.endsWith('error')) { setTurnStatus('failed'); setRunning(false) }
     })
     return unsubscribe
   }, [appendAssistantDelta, applyEvent])
@@ -128,7 +158,6 @@ export function useAppController(): AppController {
       const next = recentSessions[0]
       setSession(next)
       if (next) {
-        setModel(next.model)
         setMessages((await backend.loadConversation(next.id)).messages)
       } else {
         setMessages([])
@@ -139,9 +168,9 @@ export function useAppController(): AppController {
   }, [setFiles, setMessages, setProject, setSession, setSessions])
 
   const openProject = useCallback(async () => {
-    const path = window.prompt('项目路径')
-    if (!path) return
     try {
+      const path = await backend.selectDirectory(project?.rootPath ?? '')
+      if (!path) return
       const opened = await backend.openProject(path)
       setProject(opened)
       setProjects([opened, ...projects.filter((item) => item.rootPath !== opened.rootPath)])
@@ -155,11 +184,10 @@ export function useAppController(): AppController {
       setDiagnostic(error instanceof Error ? error.message : String(error))
       setAppState('diagnostic')
     }
-  }, [projects, setFiles, setProject, setProjects, setSession, setSessions])
+  }, [project?.rootPath, projects, setFiles, setProject, setProjects, setSession, setSessions])
 
   const selectSession = useCallback(async (next: Session) => {
     setSession(next)
-    setModel(next.model)
     setPage('home')
     try {
       setMessages((await backend.loadConversation(next.id)).messages)
@@ -168,13 +196,18 @@ export function useAppController(): AppController {
     }
   }, [setMessages, setSession])
 
+  const activeProviderName = useMemo(() => {
+    const active = modelCatalog.profiles.find((profile) => profile.id === modelCatalog.activeId)
+    return `${active?.providerSpec ?? 'openai'}-compatible`
+  }, [modelCatalog])
+
   const createSession = useCallback(async (title = '新对话') => {
     if (!project) {
       setDiagnostic('请先打开一个项目。')
       return
     }
     try {
-      const created = await backend.createSession(project.id, title, 'openai-compatible', model)
+      const created = await backend.createSession(project.id, title, activeProviderName, model)
       setSessions([created, ...sessions])
       setSession(created)
       setMessages([])
@@ -184,7 +217,7 @@ export function useAppController(): AppController {
       setSession(created)
       setMessages([])
     }
-  }, [model, project, sessions, setMessages, setSession, setSessions])
+  }, [activeProviderName, model, project, sessions, setMessages, setSession, setSessions])
 
   const startNewChat = useCallback(async () => {
     setPage('home')
@@ -217,7 +250,7 @@ export function useAppController(): AppController {
     let active = session
     if (!active && project) {
       try {
-        active = await backend.createSession(project.id, text.slice(0, 36), 'openai-compatible', model)
+        active = await backend.createSession(project.id, text.slice(0, 36), activeProviderName, model)
       } catch {
         active = { ...demoSession, id: `local-${Date.now()}`, projectId: project.id, title: text.slice(0, 36) }
       }
@@ -235,7 +268,7 @@ export function useAppController(): AppController {
     setUsage({})
     setPage('home')
     try {
-      const turn = await backend.sendMessage(active.id, text, 'openai-compatible', model)
+      const turn = await backend.sendMessage(active.id, text, activeProviderName, model)
       const nextChanges = await backend.turnChanges(turn.id).catch(() => [])
       setChanges(nextChanges)
     } catch (error) {
@@ -243,7 +276,7 @@ export function useAppController(): AppController {
       setRunning(false)
       setDiagnostic('发送前请先在设置中配置凭据引用。')
     }
-  }, [addMessage, composer, model, project, running, session, sessions, setSession, setSessions])
+  }, [activeProviderName, addMessage, composer, model, project, running, session, sessions, setSession, setSessions])
 
   const stopAgent = useCallback(async () => {
     if (session) await backend.cancelAgent(session.id).catch(() => undefined)
@@ -277,14 +310,36 @@ export function useAppController(): AppController {
     if (!value) setLLMSchedule(false)
   }, [])
 
+  const settingsPayload = useCallback((overrides: Partial<SettingsUpdate> = {}): SettingsUpdate => ({
+    theme: useThemeStore.getState().theme,
+    endpoint: endpoint.trim(),
+    model: model.trim(),
+    credentialEnv: credentialEnv.trim(),
+    contextBudgetChars: Number(contextLimit),
+    maxTurns: Number(turnLimit),
+    parallelTools,
+    llmSchedule: parallelTools && llmSchedule,
+    approvalMode,
+    ...overrides,
+  }), [approvalMode, contextLimit, credentialEnv, endpoint, llmSchedule, model, parallelTools, turnLimit])
+
+  const persistSettings = useCallback(async (overrides: Partial<SettingsUpdate> = {}) => {
+    const payload = settingsPayload(overrides)
+    const saved = await backend.updateSettings(payload)
+    if (saved?.Provider?.Endpoint) setEndpoint(saved.Provider.Endpoint)
+    if (saved?.Provider?.Model) setModel(saved.Provider.Model)
+    setCredentialEnv(saved?.Provider?.CredentialEnv ?? '')
+    if (saved?.Agent?.ContextBudgetChars) setContextLimit(String(saved.Agent.ContextBudgetChars))
+    if (saved?.Agent?.MaxTurns) setTurnLimit(String(saved.Agent.MaxTurns))
+    setParallelTools(Boolean(saved?.Agent?.ParallelTools))
+    setLLMSchedule(Boolean(saved?.Agent?.LLMSchedule))
+    setApprovalMode(approvalModeFromSettings(saved))
+    return saved
+  }, [settingsPayload])
+
   const saveSettings = useCallback(async () => {
     try {
-      const saved = await backend.updateSettings({
-        parallelTools,
-        llmSchedule: parallelTools && llmSchedule,
-      }) as { Agent?: { ParallelTools?: boolean; LLMSchedule?: boolean } } | undefined
-      setParallelTools(Boolean(saved?.Agent?.ParallelTools ?? parallelTools))
-      setLLMSchedule(Boolean(saved?.Agent?.LLMSchedule ?? (parallelTools && llmSchedule)))
+      await persistSettings()
       setPage('home')
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -294,7 +349,94 @@ export function useAppController(): AppController {
       }
       setDiagnostic(message)
     }
-  }, [llmSchedule, parallelTools])
+  }, [persistSettings])
+
+  const selectModelProfile = useCallback(async (profileId: string) => {
+    const previousCatalog = modelCatalog
+    const selected = modelCatalog.profiles.find((profile) => profile.id === profileId)
+    if (!selected) return false
+    setModelCatalog({ ...modelCatalog, activeId: profileId })
+    setModel(selected.model)
+    try {
+      const catalog = await backend.selectModelProfile(profileId)
+      setModelCatalog(catalog)
+      const active = catalog.profiles.find((profile) => profile.id === catalog.activeId)
+      if (active) {
+        setModel(active.model)
+        setEndpoint(active.baseUrl)
+      }
+      return true
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('unavailable') || message.includes('Wails')) return true
+      setModelCatalog(previousCatalog)
+      const previous = previousCatalog.profiles.find((profile) => profile.id === previousCatalog.activeId)
+      if (previous) setModel(previous.model)
+      setDiagnostic(message)
+      return false
+    }
+  }, [modelCatalog])
+
+  const saveModelProfile = useCallback(async (input: ModelProfileInput) => {
+    try {
+      const catalog = await backend.saveModelProfile(input)
+      setModelCatalog(catalog)
+      const active = catalog.profiles.find((profile) => profile.id === catalog.activeId)
+      if (active) {
+        setModel(active.model)
+        setEndpoint(active.baseUrl)
+        setCredentialEnv('')
+      }
+      return catalog
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('unavailable') || message.includes('Wails')) {
+        const profile = { ...input, hasApiKey: Boolean(input.apiKey) }
+        const catalog = {
+          activeId: input.id,
+          profiles: [...modelCatalog.profiles.filter((item) => item.id !== input.id), profile],
+        }
+        setModelCatalog(catalog)
+        setModel(input.model)
+        setEndpoint(input.baseUrl)
+        return catalog
+      }
+      setDiagnostic(message)
+      return undefined
+    }
+  }, [modelCatalog])
+
+  const testModelConnection = useCallback(async (input: ModelProfileInput): Promise<ModelConnectionResult> => {
+    try {
+      return await backend.testModelConnection(input)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('unavailable') || message.includes('Wails')) {
+        return { success: false, latencyMs: 0, message: '请通过 Klaude 桌面应用测试真实连接。' }
+      }
+      return { success: false, latencyMs: 0, message }
+    }
+  }, [])
+
+  const openModelSettings = useCallback(() => {
+    setPage('settings')
+    window.setTimeout(() => document.getElementById('settings-model')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+  }, [])
+
+  const applyApprovalMode = useCallback(async (value: ApprovalMode) => {
+    const previous = approvalMode
+    setApprovalMode(value)
+    try {
+      await persistSettings({ approvalMode: value })
+      return true
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('unavailable') || message.includes('Wails')) return true
+      setApprovalMode(previous)
+      setDiagnostic(message)
+      return false
+    }
+  }, [approvalMode, persistSettings])
 
   const groupedChanges = useMemo(
     () => changes.reduce<Record<string, FileChange[]>>((groups, change) => {
@@ -330,11 +472,11 @@ export function useAppController(): AppController {
     selectedChange,
     setSelectedChange,
     model,
-    setModel,
-    endpoint,
-    setEndpoint,
-    credentialEnv,
-    setCredentialEnv,
+    modelCatalog,
+    selectModelProfile,
+    saveModelProfile,
+    testModelConnection,
+    openModelSettings,
     contextLimit,
     setContextLimit,
     turnLimit,
@@ -343,6 +485,9 @@ export function useAppController(): AppController {
     setParallelTools: toggleParallelTools,
     llmSchedule,
     setLLMSchedule,
+    approvalMode,
+    setApprovalMode,
+    applyApprovalMode,
     saveSettings,
     turnStatus,
     usage,

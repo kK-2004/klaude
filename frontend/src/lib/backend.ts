@@ -28,6 +28,46 @@ export const backend = {
   turnChanges: (turnId: string) => call<FileChange[]>('GetTurnChanges', turnId),
   undoTurn: (turnId: string) => call<void>('UndoTurn', turnId),
   resolveApproval: (resolution: ApprovalResolution) => call<void>('ResolveApproval', resolution),
-  settings: () => call<{ Agent?: { ParallelTools?: boolean; LLMSchedule?: boolean; MaxTurns?: number; ContextBudgetChars?: number; Model?: string }; Provider?: { Endpoint?: string; Model?: string; CredentialEnv?: string } }>('Settings'),
-  updateSettings: (update: { parallelTools: boolean; llmSchedule: boolean }) => call<unknown>('UpdateSettings', update),
+  settings: () => call<BackendSettings>('Settings'),
+  updateSettings: (update: SettingsUpdate) => call<BackendSettings>('UpdateSettings', update),
+  modelProfiles: () => call<ModelCatalog>('ModelProfiles'),
+  saveModelProfile: (input: ModelProfileInput) => call<ModelCatalog>('SaveModelProfile', input),
+  selectModelProfile: (profileId: string) => call<ModelCatalog>('SelectModelProfile', profileId),
+  testModelConnection: (input: ModelProfileInput) => call<ModelConnectionResult>('TestModelConnection', input),
+}
+
+export type ApprovalMode = 'ask' | 'manual' | 'full'
+export type ProviderSpec = 'openai' | 'anthropic'
+export type ModelAPIMode = 'chat_completions' | 'responses' | 'messages'
+export type ModelProfile = {
+  id: string
+  name: string
+  providerSpec: ProviderSpec
+  apiMode: ModelAPIMode
+  baseUrl: string
+  model: string
+  contextWindow: number
+  maxOutputTokens: number
+  temperature: number
+  hasApiKey: boolean
+}
+export type ModelProfileInput = Omit<ModelProfile, 'hasApiKey'> & { apiKey: string }
+export type ModelCatalog = { activeId: string; profiles: ModelProfile[] }
+export type ModelConnectionResult = { success: boolean; latencyMs: number; message: string }
+export type BackendSettings = {
+  UI?: { Theme?: string }
+  Agent?: { ParallelTools?: boolean; LLMSchedule?: boolean; MaxTurns?: number; ContextBudgetChars?: number; ToolResultChars?: number }
+  Provider?: { Name?: string; Protocol?: ProviderSpec; APIMode?: ModelAPIMode; Endpoint?: string; Model?: string; CredentialEnv?: string; CredentialKey?: string }
+  Permissions?: { Read?: string; Write?: string; Shell?: string; Network?: string }
+}
+export type SettingsUpdate = {
+  theme: 'light' | 'dark' | 'system'
+  endpoint: string
+  model: string
+  credentialEnv: string
+  contextBudgetChars: number
+  maxTurns: number
+  parallelTools: boolean
+  llmSchedule: boolean
+  approvalMode: ApprovalMode
 }
