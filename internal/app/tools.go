@@ -6,6 +6,7 @@ import (
 
 	"github.com/klaude/klaude/internal/agent"
 	"github.com/klaude/klaude/internal/filesystem"
+	"github.com/klaude/klaude/internal/sandbox"
 	"github.com/klaude/klaude/internal/storage"
 	"github.com/klaude/klaude/internal/tool"
 )
@@ -69,7 +70,7 @@ func (c *Composition) NewProjectTools(root, turnID string) (ProjectTools, error)
 	if err != nil {
 		return ProjectTools{}, err
 	}
-	shell := tool.NewShellTool(workspace.Root, c.Config.Config.Agent.ShellTimeoutSec, maxOutput, c.Executor)
+	shell := tool.NewShellTool(workspace.Root, c.Config.Config.Agent.ShellTimeoutSec, maxOutput, c.Executor, c.shellSandboxPolicy(workspace.Root, turnID))
 	if err := tool.RegisterMutating(registry, tool.WriteContext{
 		Workspace: workspace,
 		Snapshots: snapshots,
@@ -79,6 +80,22 @@ func (c *Composition) NewProjectTools(root, turnID string) (ProjectTools, error)
 		return ProjectTools{}, err
 	}
 	return ProjectTools{Registry: registry, Lookup: registryLookup{registry: registry}}, nil
+}
+
+func (c *Composition) shellSandboxPolicy(workspaceRoot, turnID string) *sandbox.Policy {
+	cfg := c.Config.Config.Agent.Sandbox
+	if !cfg.Enabled {
+		return nil
+	}
+	mode, err := sandbox.ParseMode(cfg.Mode)
+	if err != nil || mode == sandbox.ModeDangerFullAccess {
+		return nil
+	}
+	return &sandbox.Policy{
+		Mode:          mode,
+		WorkspaceRoot: workspaceRoot,
+		SessionID:     turnID,
+	}
 }
 
 // SchedulerConfigFromApp maps user config into the agent scheduler flags.

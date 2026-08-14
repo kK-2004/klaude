@@ -10,7 +10,7 @@ import (
 
 func TestRuntimePackagesDoNotImportDesktopOrFrontendTypes(t *testing.T) {
 	root := filepath.Join("..", "..")
-	for _, pkg := range []string{"agent", "context", "model", "tool", "permission", "approval"} {
+	for _, pkg := range []string{"agent", "context", "model", "tool", "permission", "approval", "sandbox", "executor"} {
 		dir := filepath.Join(root, "internal", pkg)
 		entries, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		if err != nil {

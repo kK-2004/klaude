@@ -9,6 +9,7 @@ import (
 
 	"github.com/klaude/klaude/internal/executor"
 	"github.com/klaude/klaude/internal/filesystem"
+	"github.com/klaude/klaude/internal/sandbox"
 )
 
 // ChangeRecorder persists a successful filesystem mutation for review/undo.
@@ -147,7 +148,7 @@ func mapWriteError(err error) Result {
 }
 
 // NewShellTool builds a bounded workspace shell tool for registry registration.
-func NewShellTool(workspace string, timeoutSec, maxOutput int, exec executor.Local) ShellTool {
+func NewShellTool(workspace string, timeoutSec, maxOutput int, exec executor.Local, policy *sandbox.Policy) ShellTool {
 	timeout := time.Duration(timeoutSec) * time.Second
 	if timeout <= 0 {
 		timeout = 120 * time.Second
@@ -155,5 +156,5 @@ func NewShellTool(workspace string, timeoutSec, maxOutput int, exec executor.Loc
 	if maxOutput <= 0 {
 		maxOutput = 24_000
 	}
-	return ShellTool{Workspace: workspace, Timeout: timeout, MaxOutput: maxOutput, Executor: exec}
+	return ShellTool{Workspace: workspace, Timeout: timeout, MaxOutput: maxOutput, Executor: exec, SandboxPolicy: policy}
 }

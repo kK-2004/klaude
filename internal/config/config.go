@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -23,12 +24,20 @@ type UIConfig struct {
 }
 
 type AgentConfig struct {
-	MaxTurns           int  `toml:"max_turns"`
-	ContextBudgetChars int  `toml:"context_budget_chars"`
-	ToolResultChars    int  `toml:"tool_result_chars"`
-	ShellTimeoutSec    int  `toml:"shell_timeout_sec"`
-	ParallelTools      bool `toml:"parallel_tools"`
-	LLMSchedule        bool `toml:"llm_schedule"`
+	MaxTurns           int           `toml:"max_turns"`
+	ContextBudgetChars int           `toml:"context_budget_chars"`
+	ToolResultChars    int           `toml:"tool_result_chars"`
+	ShellTimeoutSec    int           `toml:"shell_timeout_sec"`
+	ParallelTools      bool          `toml:"parallel_tools"`
+	LLMSchedule        bool          `toml:"llm_schedule"`
+	Sandbox            SandboxConfig `toml:"sandbox"`
+}
+
+// SandboxConfig controls OS subprocess confinement for shell (and future spawners).
+type SandboxConfig struct {
+	// Enabled defaults to true on macOS (Seatbelt) and false elsewhere until Linux/Windows backends ship.
+	Enabled bool   `toml:"enabled"`
+	Mode    string `toml:"mode"` // read_only | workspace_write | danger_full_access
 }
 
 type ProviderConfig struct {
@@ -71,9 +80,28 @@ func Defaults() Config {
 	return Config{
 		DefaultModel: "openai:gpt-4o-mini",
 		UI:           UIConfig{Theme: "system"},
-		Agent:        AgentConfig{MaxTurns: 50, ContextBudgetChars: 120_000, ToolResultChars: 24_000, ShellTimeoutSec: 120},
-		Provider:     ProviderConfig{Name: "openai-compatible", Protocol: "openai", APIMode: "chat_completions", Endpoint: "https://api.openai.com/v1", Model: "gpt-4o-mini", CredentialEnv: "OPENAI_API_KEY", ContextWindow: 128_000, MaxOutputTokens: 16_384, Temperature: 0.2, SupportsTools: true},
-		Permissions:  PermissionConfig{Read: "allow", Write: "ask", Shell: "ask", Network: "ask", ShellRules: map[string]string{}},
+		Agent: AgentConfig{
+			MaxTurns:           50,
+			ContextBudgetChars: 120_000,
+			ToolResultChars:    24_000,
+			ShellTimeoutSec:    120,
+			Sandbox: SandboxConfig{
+				Enabled: defaultSandboxEnabled(),
+				Mode:    "workspace_write",
+			},
+		},
+		Provider:    ProviderConfig{Name: "openai-compatible", Protocol: "openai", APIMode: "chat_completions", Endpoint: "https://api.openai.com/v1", Model: "gpt-4o-mini", CredentialEnv: "OPENAI_API_KEY", ContextWindow: 128_000, MaxOutputTokens: 16_384, Temperature: 0.2, SupportsTools: true},
+		Permissions: PermissionConfig{Read: "allow", Write: "ask", Shell: "ask", Network: "ask", ShellRules: map[string]string{}},
+	}
+}
+
+func defaultSandboxEnabled() bool {
+	// Seatbelt (macOS), bwrap/Landlock (Linux), WinACL (Windows).
+	switch runtime.GOOS {
+	case "darwin", "linux", "windows":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -158,6 +186,13 @@ func Validate(cfg Config, project bool) error {
 	if cfg.Agent.ShellTimeoutSec < 0 || cfg.Agent.ShellTimeoutSec > 86_400 {
 		return errors.New("agent.shell_timeout_sec is out of range")
 	}
+	if cfg.Agent.Sandbox.Mode != "" {
+		switch strings.ToLower(strings.TrimSpace(cfg.Agent.Sandbox.Mode)) {
+		case "read_only", "read-only", "readonly", "workspace_write", "workspace-write", "danger_full_access", "danger-full-access", "full_access", "full-access":
+		default:
+			return errors.New("agent.sandbox.mode must be read_only, workspace_write, or danger_full_access")
+		}
+	}
 	if cfg.Provider.Endpoint != "" {
 		if !strings.HasPrefix(cfg.Provider.Endpoint, "https://") && !(cfg.Provider.AllowHTTPForLocal && (strings.HasPrefix(cfg.Provider.Endpoint, "http://localhost") || strings.HasPrefix(cfg.Provider.Endpoint, "http://127.0.0.1") || strings.HasPrefix(cfg.Provider.Endpoint, "http://[::1]"))) {
 			return errors.New("provider.endpoint must use https, except explicit localhost development mode")
@@ -229,6 +264,12 @@ func merge(dst *Config, patch Config, project bool, meta toml.MetaData) {
 	}
 	if meta.IsDefined("agent", "llm_schedule") {
 		dst.Agent.LLMSchedule = patch.Agent.LLMSchedule
+	}
+	if meta.IsDefined("agent", "sandbox", "enabled") {
+		dst.Agent.Sandbox.Enabled = patch.Agent.Sandbox.Enabled
+	}
+	if meta.IsDefined("agent", "sandbox", "mode") && patch.Agent.Sandbox.Mode != "" {
+		dst.Agent.Sandbox.Mode = patch.Agent.Sandbox.Mode
 	}
 	if patch.Provider.Name != "" {
 		dst.Provider.Name = patch.Provider.Name

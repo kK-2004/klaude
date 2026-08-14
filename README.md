@@ -47,9 +47,15 @@ development servers.
 
 The MVP enforces a logical workspace boundary: path resolution rejects
 traversal and symlink escapes, and mutating/shell tools default to approval.
-This is not an OS sandbox. Review the Changes panel before Undo or further
-edits. Binary and oversized content is shown as metadata-only instead of being
-rendered as executable HTML.
+On macOS, shell commands additionally run under Seatbelt (`sandbox-exec`) when
+`agent.sandbox.enabled` is true (the default on Darwin/Linux/Windows): writes
+are limited to the workspace and temp roots. Linux uses bubblewrap with
+Landlock (`landlock-run` on PATH) as fallback. Windows uses a WRITE_RESTRICTED
+token plus directory ACLs (`enforcement: partial` — Everyone keep-alive and
+NTFS hard-link gaps). This is still not a full OS threat model for the main
+process.
+Review the Changes panel before Undo or further edits. Binary and oversized
+content is shown as metadata-only instead of being rendered as executable HTML.
 
 ## Troubleshooting and privacy
 

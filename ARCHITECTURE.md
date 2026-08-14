@@ -13,9 +13,13 @@ frontend -> Wails bindings -> internal/app -> runtime ports -> infrastructure
 - `internal/app` is the only package that is bound to Wails. It translates RPC
   DTOs and desktop events into domain calls.
 - `internal/filesystem`, `internal/search`, `internal/git`, `internal/executor`,
-  `internal/storage`, `internal/config`, and `internal/trace` implement ports.
+  `internal/sandbox`, `internal/storage`, `internal/config`, and `internal/trace`
+  implement ports.
 - `frontend/src` owns presentation and local UI state only. It must not contain
   filesystem, Git, shell, permission, or model-provider behavior.
 
-The first release intentionally provides logical workspace restrictions and
-approval policy, not an OS-level sandbox.
+Shell confinement (when enabled) wraps subprocess argv via `internal/sandbox`
+before `internal/executor` spawns (or, on Windows, prepares an `exec.Cmd` with
+a restricted token). Permission/approval remain separate. Supported backends:
+macOS Seatbelt, Linux bwrap→Landlock, Windows Restricted Token + ACL (partial).
+Logical workspace restrictions still apply to in-process file tools.

@@ -12,6 +12,7 @@ import (
 	"github.com/klaude/klaude/internal/executor"
 	"github.com/klaude/klaude/internal/permission"
 	"github.com/klaude/klaude/internal/project"
+	"github.com/klaude/klaude/internal/sandbox"
 	"github.com/klaude/klaude/internal/session"
 	"github.com/klaude/klaude/internal/storage"
 	"github.com/klaude/klaude/internal/tool"
@@ -52,7 +53,20 @@ func Build(ctx context.Context, dirs storage.DataDirs, logger *slog.Logger) (*Co
 		}
 	}
 	loaded := config.Load(config.UserConfigPath(dirs.Base), "")
-	composition := &Composition{Data: dirs, DB: db, Config: loaded, Events: event.NewBus(), Approvals: approval.NewManager(), Permissions: permissionsFromConfig(loaded.Config), Executor: executor.Local{}, Projects: project.NewManager(db), Sessions: session.NewManager(db), Tools: tool.NewRegistry(), Context: agentcontext.Manager{SystemInstructions: "You are Klaude, a careful coding agent.", BudgetChars: loaded.Config.Agent.ContextBudgetChars, ToolResultChars: loaded.Config.Agent.ToolResultChars}, Logger: logger}
+	composition := &Composition{
+		Data:        dirs,
+		DB:          db,
+		Config:      loaded,
+		Events:      event.NewBus(),
+		Approvals:   approval.NewManager(),
+		Permissions: permissionsFromConfig(loaded.Config),
+		Executor:    executor.Local{Sandbox: sandbox.Platform()},
+		Projects:    project.NewManager(db),
+		Sessions:    session.NewManager(db),
+		Tools:       tool.NewRegistry(),
+		Context:     agentcontext.Manager{SystemInstructions: "You are Klaude, a careful coding agent.", BudgetChars: loaded.Config.Agent.ContextBudgetChars, ToolResultChars: loaded.Config.Agent.ToolResultChars},
+		Logger:      logger,
+	}
 	tracePath := dirs.Traces + "/startup.jsonl"
 	if writer, traceErr := trace.Open(tracePath, 10*1024*1024); traceErr == nil {
 		composition.Trace = writer
