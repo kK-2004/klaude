@@ -3,10 +3,10 @@ package app
 import (
 	"errors"
 
-	"github.com/klaude/klaude/internal/config"
-	"github.com/klaude/klaude/internal/model"
-	"github.com/klaude/klaude/internal/model/anthropic"
-	"github.com/klaude/klaude/internal/model/openai"
+	"github.com/kk-2004/klaude/internal/config"
+	"github.com/kk-2004/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/model/anthropic"
+	"github.com/kk-2004/klaude/internal/model/openai"
 )
 
 func (s *Service) newConfiguredProvider(cfg config.ProviderConfig) (model.Provider, error) {

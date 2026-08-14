@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/klaude/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/model"
 )
 
 type responsesBody struct {

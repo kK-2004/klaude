@@ -18,6 +18,10 @@ export function CheckoutGitBranch(arg1, arg2, arg3) {
   return window['go']['app']['RPCService']['CheckoutGitBranch'](arg1, arg2, arg3);
 }
 
+export function ConnectMCPServer(arg1) {
+  return window['go']['app']['RPCService']['ConnectMCPServer'](arg1);
+}
+
 export function CreateGitWorktree(arg1, arg2, arg3, arg4) {
   return window['go']['app']['RPCService']['CreateGitWorktree'](arg1, arg2, arg3, arg4);
 }
@@ -28,6 +32,18 @@ export function CreateSession(arg1, arg2, arg3, arg4) {
 
 export function DeleteGitBranch(arg1, arg2, arg3) {
   return window['go']['app']['RPCService']['DeleteGitBranch'](arg1, arg2, arg3);
+}
+
+export function DeleteMCPServer(arg1) {
+  return window['go']['app']['RPCService']['DeleteMCPServer'](arg1);
+}
+
+export function DeleteProject(arg1) {
+  return window['go']['app']['RPCService']['DeleteProject'](arg1);
+}
+
+export function DisconnectMCPServer(arg1) {
+  return window['go']['app']['RPCService']['DisconnectMCPServer'](arg1);
 }
 
 export function GetTurnChanges(arg1) {
@@ -46,6 +62,10 @@ export function ListProjects() {
   return window['go']['app']['RPCService']['ListProjects']();
 }
 
+export function ListRecentSessions() {
+  return window['go']['app']['RPCService']['ListRecentSessions']();
+}
+
 export function ListSessions(arg1) {
   return window['go']['app']['RPCService']['ListSessions'](arg1);
 }
@@ -54,12 +74,24 @@ export function LoadConversation(arg1) {
   return window['go']['app']['RPCService']['LoadConversation'](arg1);
 }
 
+export function MCPServers() {
+  return window['go']['app']['RPCService']['MCPServers']();
+}
+
 export function ModelProfiles() {
   return window['go']['app']['RPCService']['ModelProfiles']();
 }
 
+export function MoveSession(arg1, arg2) {
+  return window['go']['app']['RPCService']['MoveSession'](arg1, arg2);
+}
+
 export function OpenProject(arg1) {
   return window['go']['app']['RPCService']['OpenProject'](arg1);
+}
+
+export function RenameProject(arg1, arg2) {
+  return window['go']['app']['RPCService']['RenameProject'](arg1, arg2);
 }
 
 export function RenameSession(arg1, arg2) {
@@ -68,6 +100,14 @@ export function RenameSession(arg1, arg2) {
 
 export function ResolveApproval(arg1) {
   return window['go']['app']['RPCService']['ResolveApproval'](arg1);
+}
+
+export function RevealProject(arg1) {
+  return window['go']['app']['RPCService']['RevealProject'](arg1);
+}
+
+export function SaveMCPServer(arg1) {
+  return window['go']['app']['RPCService']['SaveMCPServer'](arg1);
 }
 
 export function SaveModelProfile(arg1) {
@@ -84,6 +124,10 @@ export function SelectModelProfile(arg1) {
 
 export function SendMessage(arg1, arg2, arg3, arg4) {
   return window['go']['app']['RPCService']['SendMessage'](arg1, arg2, arg3, arg4);
+}
+
+export function SetProjectPinned(arg1, arg2) {
+  return window['go']['app']['RPCService']['SetProjectPinned'](arg1, arg2);
 }
 
 export function Settings() {

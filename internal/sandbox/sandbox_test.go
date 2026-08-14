@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/klaude/klaude/internal/sandbox"
+	"github.com/kk-2004/klaude/internal/sandbox"
 )
 
 func TestParseMode(t *testing.T) {

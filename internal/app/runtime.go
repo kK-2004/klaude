@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/klaude/klaude/internal/agent"
-	"github.com/klaude/klaude/internal/approval"
-	"github.com/klaude/klaude/internal/event"
-	"github.com/klaude/klaude/internal/model"
-	"github.com/klaude/klaude/internal/storage"
-	"github.com/klaude/klaude/internal/tool"
+	"github.com/kk-2004/klaude/internal/agent"
+	"github.com/kk-2004/klaude/internal/approval"
+	"github.com/kk-2004/klaude/internal/event"
+	"github.com/kk-2004/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/tool"
 )
 
 // runTurn assembles a fresh provider, project-bound tool registry, permissions,

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/klaude/klaude/internal/executor"
-	"github.com/klaude/klaude/internal/filesystem"
-	"github.com/klaude/klaude/internal/sandbox"
+	"github.com/kk-2004/klaude/internal/executor"
+	"github.com/kk-2004/klaude/internal/filesystem"
+	"github.com/kk-2004/klaude/internal/sandbox"
 )
 
 // ChangeRecorder persists a successful filesystem mutation for review/undo.

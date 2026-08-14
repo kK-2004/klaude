@@ -3,6 +3,7 @@ import { ArrowUp, Bot, Check, ChevronDown, Clock, Folder, PencilLine, ShieldChec
 import { useApp } from '../app/use-app'
 import type { ApprovalMode } from '../lib/backend'
 import { GitBranchSelector } from './GitBranchSelector'
+import { shouldSubmitComposerKey } from './composer-input'
 
 export function Composer() {
   const {
@@ -39,7 +40,9 @@ export function Composer() {
           value={composer}
           onChange={(event) => setComposer(event.target.value)}
           onKeyDown={(event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') void submitMessage()
+            if (!shouldSubmitComposerKey(event)) return
+            event.preventDefault()
+            void submitMessage()
           }}
           placeholder="随心输入"
           rows={3}
@@ -140,7 +143,7 @@ function ModelSelector({ model }: { model: string }) {
   return (
     <div className="composer-control model-control" ref={ref}>
       <button type="button" className="model-chip" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        {active?.name ?? (model === 'not configured' ? '选择模型' : model)}<ChevronDown size={13} strokeWidth={1.75} />
+            {active?.name ?? (model ? model : '未配置模型')}<ChevronDown size={13} strokeWidth={1.75} />
       </button>
       {open && (
         <div className="composer-popover model-popover">
@@ -173,7 +176,7 @@ function ModelSelector({ model }: { model: string }) {
               })}
               {modelCatalog.profiles.length === 0 && <div className="model-popover-empty">还没有可用模型</div>}
             </div>
-            {hasOverflowList && <span className="model-scroll-track" aria-hidden="true"><span style={{ height: scrollbar.height, transform: `translateY(${scrollbar.top}px)` }} /></span>}
+            {hasOverflowList && <span className="model-scroll-track" aria-hidden="true"><span style={{ height: scrollbar.height, top: scrollbar.top }} /></span>}
           </div>
           <button type="button" className="configure-model-button" onClick={() => { setOpen(false); openModelSettings() }}><PencilLine size={17} />配置自定义模型</button>
         </div>

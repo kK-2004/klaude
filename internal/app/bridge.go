@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/klaude/klaude/internal/event"
+	"github.com/kk-2004/klaude/internal/event"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -12,6 +12,7 @@ const AgentEventChannel = "klaude:agent-event"
 
 // EventBridge 把内部 event.Bus 信封转发到 Wails EventsEmit。
 type EventBridge struct {
+	Context context.Context
 	Publish func(context.Context, string, event.Envelope) error
 }
 
@@ -25,6 +26,9 @@ func NewEventBridge() EventBridge {
 func (b EventBridge) Forward(ctx context.Context, envelope event.Envelope) error {
 	if b.Publish == nil {
 		return nil
+	}
+	if b.Context != nil {
+		ctx = b.Context
 	}
 	return b.Publish(ctx, AgentEventChannel, envelope)
 }

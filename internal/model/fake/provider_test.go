@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/klaude/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/model"
 )
 
 func TestCodingTurnFixtureIsDeterministicAndOffline(t *testing.T) {

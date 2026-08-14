@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/kk-2004/klaude/internal/mcp"
 )
 
 type Config struct {
@@ -17,6 +18,7 @@ type Config struct {
 	Agent        AgentConfig      `toml:"agent"`
 	Provider     ProviderConfig   `toml:"provider"`
 	Permissions  PermissionConfig `toml:"permissions"`
+	MCPServers   []mcp.Definition `toml:"mcp_servers"`
 }
 
 type UIConfig struct {
@@ -78,7 +80,7 @@ type LoadResult struct {
 
 func Defaults() Config {
 	return Config{
-		DefaultModel: "openai:gpt-4o-mini",
+		DefaultModel: "",
 		UI:           UIConfig{Theme: "system"},
 		Agent: AgentConfig{
 			MaxTurns:           50,
@@ -90,7 +92,7 @@ func Defaults() Config {
 				Mode:    "workspace_write",
 			},
 		},
-		Provider:    ProviderConfig{Name: "openai-compatible", Protocol: "openai", APIMode: "chat_completions", Endpoint: "https://api.openai.com/v1", Model: "gpt-4o-mini", CredentialEnv: "OPENAI_API_KEY", ContextWindow: 128_000, MaxOutputTokens: 16_384, Temperature: 0.2, SupportsTools: true},
+		Provider:    ProviderConfig{Name: "openai-compatible", Protocol: "openai", APIMode: "chat_completions", Endpoint: "https://api.openai.com/v1", CredentialEnv: "OPENAI_API_KEY", ContextWindow: 128_000, MaxOutputTokens: 16_384, Temperature: 0.2, SupportsTools: true},
 		Permissions: PermissionConfig{Read: "allow", Write: "ask", Shell: "ask", Network: "ask", ShellRules: map[string]string{}},
 	}
 }
@@ -116,9 +118,6 @@ func Load(userPath, projectRoot string) LoadResult {
 		projectConfig := filepath.Join(projectRoot, ".klaude", "config.toml")
 		result.loadFile(projectConfig, true)
 		result.loadInstructions(projectRoot)
-	}
-	if result.Config.DefaultModel == "" {
-		result.Config.DefaultModel = result.Config.Provider.Name + ":" + result.Config.Provider.Model
 	}
 	return result
 }
@@ -304,6 +303,9 @@ func merge(dst *Config, patch Config, project bool, meta toml.MetaData) {
 	if !project {
 		dst.Provider.AllowHTTPForLocal = patch.Provider.AllowHTTPForLocal
 		dst.Provider.SupportsTools = patch.Provider.SupportsTools
+		if meta.IsDefined("mcp_servers") {
+			dst.MCPServers = patch.MCPServers
+		}
 	}
 	if !project && patch.Permissions.ShellRules != nil {
 		dst.Permissions.ShellRules = patch.Permissions.ShellRules

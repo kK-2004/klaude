@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 import type { Capability, FileEntry, Message, Project, Session } from '../types/backend'
+import { createLocalID } from '../lib/id'
 
 type WorkspaceState = {
   project?: Project
-  projects: Project[]
-  sessions: Session[]
+	projects: Project[]
+	sessions: Session[]
+	recentSessions: Session[]
   session?: Session
   files: FileEntry[]
   capabilities: Capability[]
@@ -13,7 +15,8 @@ type WorkspaceState = {
   panelRight: number
   setProject: (project?: Project) => void
   setProjects: (projects: Project[]) => void
-  setSessions: (sessions: Session[]) => void
+	setSessions: (sessions: Session[]) => void
+	setRecentSessions: (sessions: Session[]) => void
   setSession: (session?: Session) => void
   setFiles: (files: FileEntry[]) => void
   setCapabilities: (capabilities: Capability[]) => void
@@ -32,7 +35,8 @@ const readWidth = (key: string, fallback: number) => {
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   project: undefined,
   projects: [],
-  sessions: [],
+	sessions: [],
+	recentSessions: [],
   files: [],
   capabilities: [],
   messages: [],
@@ -40,18 +44,19 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   panelRight: readWidth('klaude.panel.right', 278),
   setProject: (project) => set({ project }),
   setProjects: (projects) => set({ projects }),
-  setSessions: (sessions) => set({ sessions }),
+	setSessions: (sessions) => set({ sessions }),
+	setRecentSessions: (recentSessions) => set({ recentSessions }),
   setSession: (session) => set({ session }),
   setFiles: (files) => set({ files }),
   setCapabilities: (capabilities) => set({ capabilities }),
   setMessages: (messages) => set({ messages }),
   addMessage: (message) => set((state) => ({
-    messages: [...state.messages, 'id' in message ? message : { ...message, id: `local-${crypto.randomUUID()}`, sessionId: state.session?.id ?? 'local', createdAt: new Date().toISOString() }],
+    messages: [...state.messages, 'id' in message ? message : { ...message, id: createLocalID(), sessionId: state.session?.id ?? 'local', createdAt: new Date().toISOString() }],
   })),
   appendAssistantDelta: (delta) => set((state) => {
     const last = state.messages[state.messages.length - 1]
     if (last?.role === 'assistant') return { messages: [...state.messages.slice(0, -1), { ...last, content: last.content + delta }] }
-    return { messages: [...state.messages, { id: `local-${crypto.randomUUID()}`, sessionId: state.session?.id ?? 'local', role: 'assistant', content: delta, createdAt: new Date().toISOString() }] }
+    return { messages: [...state.messages, { id: createLocalID(), sessionId: state.session?.id ?? 'local', role: 'assistant', content: delta, createdAt: new Date().toISOString() }] }
   }),
   setPanelWidth: (side, width) => {
     const bounded = Math.max(180, Math.min(420, width))

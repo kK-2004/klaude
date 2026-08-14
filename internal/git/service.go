@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/klaude/klaude/internal/executor"
+	"github.com/kk-2004/klaude/internal/executor"
 )
 
 var ErrNotRepository = errors.New("git: not a repository")

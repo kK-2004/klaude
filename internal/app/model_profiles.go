@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/klaude/klaude/internal/config"
-	"github.com/klaude/klaude/internal/model"
-	"github.com/klaude/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/config"
+	"github.com/kk-2004/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/storage"
 )
 
 const modelCatalogSettingKey = "model_profiles"
@@ -206,6 +206,9 @@ func (s *Service) loadModelCatalog(ctx context.Context, cfg config.Config) (stor
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return storedModelCatalog{}, err
 		}
+	}
+	if strings.TrimSpace(cfg.Provider.Model) == "" {
+		return storedModelCatalog{Profiles: []storedModelProfile{}}, nil
 	}
 	profile := storedProfileFromConfig(cfg.Provider)
 	return storedModelCatalog{ActiveID: profile.ID, Profiles: []storedModelProfile{profile}}, nil

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/klaude/klaude/internal/approval"
-	"github.com/klaude/klaude/internal/permission"
-	"github.com/klaude/klaude/internal/trace"
+	"github.com/kk-2004/klaude/internal/approval"
+	"github.com/kk-2004/klaude/internal/permission"
+	"github.com/kk-2004/klaude/internal/trace"
 )
 
 // Dispatcher 是工具执行的统一入口：校验参数 → 权限裁决 →（必要时）阻塞等人批 → 真正执行。

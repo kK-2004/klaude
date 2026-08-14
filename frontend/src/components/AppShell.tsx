@@ -11,7 +11,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'} ${settingsMode ? 'settings-mode' : ''}`}>
       <div className="window-drag-region" aria-hidden="true" />
       {!settingsMode && sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
-      {!settingsMode && sidebarOpen && <Sidebar />}
+      {!settingsMode && <Sidebar />}
       <div className="main">
         {diagnostic && (
           <div className="notice-bar">

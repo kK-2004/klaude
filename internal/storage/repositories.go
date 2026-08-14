@@ -144,6 +144,29 @@ func (d *DB) ListSessions(ctx context.Context, projectID string) ([]Session, err
 	return sessions, rows.Err()
 }
 
+// ListRecentSessions 返回所有项目中最近更新的会话，调用方可用 limit 控制展示数量。
+func (d *DB) ListRecentSessions(ctx context.Context, limit int) ([]Session, error) {
+	if limit <= 0 {
+		return []Session{}, nil
+	}
+	rows, err := d.SQL.QueryContext(ctx, `SELECT id,project_id,title,provider,model,status,created_at,updated_at FROM sessions ORDER BY updated_at DESC,id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]Session, 0, limit)
+	for rows.Next() {
+		var session Session
+		var created, updated int64
+		if err := rows.Scan(&session.ID, &session.ProjectID, &session.Title, &session.Provider, &session.Model, &session.Status, &created, &updated); err != nil {
+			return nil, err
+		}
+		session.CreatedAt, session.UpdatedAt = timeFromMillis(created), timeFromMillis(updated)
+		result = append(result, session)
+	}
+	return result, rows.Err()
+}
+
 func (d *DB) GetSession(ctx context.Context, sessionID string) (Session, error) {
 	var session Session
 	var created, updated int64

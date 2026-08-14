@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/klaude/klaude/internal/config"
-	"github.com/klaude/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/config"
+	"github.com/kk-2004/klaude/internal/model"
 )
 
 // Provider 实现 OpenAI-compatible /chat/completions 流式协议，

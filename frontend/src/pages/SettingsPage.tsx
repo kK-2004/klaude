@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowLeft, Bot, Check, ChevronRight, Gauge, GitBranch, Layers, Moon,
+  ArrowLeft, Bot, Cable, Check, ChevronRight, Gauge, GitBranch, Layers, Moon,
   Palette, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, Zap,
 } from 'lucide-react'
 import { useApp } from '../app/use-app'
 import type { ApprovalMode } from '../lib/backend'
 import { useThemeStore } from '../stores/theme'
 import { ModelSettings } from '../components/ModelSettings'
+import { McpManager } from '../components/McpManager'
 
 const approvalModes: { value: ApprovalMode; title: string; detail: string }[] = [
   { value: 'ask', title: '帮我批准', detail: '可自动读取工作区；写入文件和执行命令前会请求批准。' },
@@ -18,6 +19,7 @@ const navItems = [
   { id: 'permissions', label: '权限', icon: ShieldCheck },
   { id: 'appearance', label: '外观', icon: Palette },
   { id: 'model', label: '模型', icon: Bot },
+  { id: 'mcp', label: 'MCP', icon: Cable },
   { id: 'tools', label: '工具并发', icon: Layers },
   { id: 'workspace', label: '工作区', icon: Gauge },
 ]
@@ -118,6 +120,10 @@ export function SettingsPage() {
 
           <SettingsGroup id="model" title="模型" description="配置 OpenAI 或 Anthropic 规范、API 模式与推理参数；可在保存前发送真实请求验证连接。">
             <ModelSettings />
+          </SettingsGroup>
+
+          <SettingsGroup id="mcp" title="MCP" description="配置可供 Agent 使用的 MCP 服务；支持 Streamable HTTP 和 stdio。">
+            <McpManager compact />
           </SettingsGroup>
 
           <SettingsGroup id="tools" title="工具并发" description="无资源冲突的工具可并行执行，涉及同一文件的修改仍会串行。">

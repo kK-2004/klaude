@@ -5,18 +5,19 @@ import (
 	"log/slog"
 	"sort"
 
-	"github.com/klaude/klaude/internal/approval"
-	"github.com/klaude/klaude/internal/config"
-	agentcontext "github.com/klaude/klaude/internal/context"
-	"github.com/klaude/klaude/internal/event"
-	"github.com/klaude/klaude/internal/executor"
-	"github.com/klaude/klaude/internal/permission"
-	"github.com/klaude/klaude/internal/project"
-	"github.com/klaude/klaude/internal/sandbox"
-	"github.com/klaude/klaude/internal/session"
-	"github.com/klaude/klaude/internal/storage"
-	"github.com/klaude/klaude/internal/tool"
-	"github.com/klaude/klaude/internal/trace"
+	"github.com/kk-2004/klaude/internal/approval"
+	"github.com/kk-2004/klaude/internal/config"
+	agentcontext "github.com/kk-2004/klaude/internal/context"
+	"github.com/kk-2004/klaude/internal/event"
+	"github.com/kk-2004/klaude/internal/executor"
+	"github.com/kk-2004/klaude/internal/mcp"
+	"github.com/kk-2004/klaude/internal/permission"
+	"github.com/kk-2004/klaude/internal/project"
+	"github.com/kk-2004/klaude/internal/sandbox"
+	"github.com/kk-2004/klaude/internal/session"
+	"github.com/kk-2004/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/tool"
+	"github.com/kk-2004/klaude/internal/trace"
 )
 
 // Composition 聚合应用启动后共享的基础设施与领域服务，供 Service 注入使用。
@@ -31,6 +32,7 @@ type Composition struct {
 	Projects    *project.Manager
 	Sessions    *session.Manager
 	Tools       *tool.Registry
+	MCP         *mcp.Manager
 	Context     agentcontext.Manager
 	Logger      *slog.Logger
 	Trace       *trace.Writer
@@ -64,6 +66,7 @@ func Build(ctx context.Context, dirs storage.DataDirs, logger *slog.Logger) (*Co
 		Projects:    project.NewManager(db),
 		Sessions:    session.NewManager(db),
 		Tools:       tool.NewRegistry(),
+		MCP:         mcp.NewManager(loaded.Config.MCPServers, logger),
 		Context:     agentcontext.Manager{SystemInstructions: "You are Klaude, a careful coding agent.", BudgetChars: loaded.Config.Agent.ContextBudgetChars, ToolResultChars: loaded.Config.Agent.ToolResultChars},
 		Logger:      logger,
 	}
@@ -94,6 +97,9 @@ func permissionsFromConfig(cfg config.Config) permission.Engine {
 }
 
 func (c *Composition) Close() error {
+	if c.MCP != nil {
+		_ = c.MCP.Close()
+	}
 	if c.Trace != nil {
 		_ = c.Trace.Close()
 	}

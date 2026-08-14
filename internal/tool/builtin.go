@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/klaude/klaude/internal/filesystem"
+	"github.com/kk-2004/klaude/internal/filesystem"
 )
 
 // BuiltinContext 是只读内置工具共享的工作区与输出上限。

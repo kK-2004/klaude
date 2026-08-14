@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/klaude/klaude/internal/model"
-	"github.com/klaude/klaude/internal/trace"
+	"github.com/kk-2004/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/trace"
 )
 
 // SchedulePlanner proposes additional ordering edges for ambiguous tool batches.

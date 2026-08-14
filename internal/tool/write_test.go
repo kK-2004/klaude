@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/klaude/klaude/internal/filesystem"
+	"github.com/kk-2004/klaude/internal/filesystem"
 )
 
 type memRecorder struct{ changes []filesystem.Change }

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/klaude/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/storage"
 )
 
 func TestBuildCompositionInitializesCorePorts(t *testing.T) {

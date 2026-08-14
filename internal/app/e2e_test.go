@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/klaude/klaude/internal/filesystem"
-	"github.com/klaude/klaude/internal/model"
-	"github.com/klaude/klaude/internal/model/fake"
-	"github.com/klaude/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/filesystem"
+	"github.com/kk-2004/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/model/fake"
+	"github.com/kk-2004/klaude/internal/storage"
 	"log/slog"
 )
 

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/klaude/klaude/internal/config"
-	"github.com/klaude/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/config"
+	"github.com/kk-2004/klaude/internal/storage"
 )
 
 func TestNewProjectToolsRegistersReadAndWrite(t *testing.T) {

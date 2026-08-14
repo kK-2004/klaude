@@ -14,11 +14,19 @@ export function Capabilities():Promise<Array<project.Capability>>;
 
 export function CheckoutGitBranch(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
+export function ConnectMCPServer(arg1:string):Promise<Array<app.MCPServerDTO>>;
+
 export function CreateGitWorktree(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function CreateSession(arg1:string,arg2:string,arg3:string,arg4:string):Promise<app.SessionDTO>;
 
 export function DeleteGitBranch(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
+export function DeleteMCPServer(arg1:string):Promise<Array<app.MCPServerDTO>>;
+
+export function DeleteProject(arg1:string):Promise<void>;
+
+export function DisconnectMCPServer(arg1:string):Promise<Array<app.MCPServerDTO>>;
 
 export function GetTurnChanges(arg1:string):Promise<Array<app.FileChangeDTO>>;
 
@@ -28,17 +36,29 @@ export function Health():Promise<app.HealthResponse>;
 
 export function ListProjects():Promise<Array<app.ProjectDTO>>;
 
+export function ListRecentSessions():Promise<Array<app.SessionDTO>>;
+
 export function ListSessions(arg1:string):Promise<Array<app.SessionDTO>>;
 
 export function LoadConversation(arg1:string):Promise<app.ConversationSnapshotDTO>;
 
+export function MCPServers():Promise<Array<app.MCPServerDTO>>;
+
 export function ModelProfiles():Promise<app.ModelCatalog>;
 
+export function MoveSession(arg1:string,arg2:string):Promise<app.SessionDTO>;
+
 export function OpenProject(arg1:string):Promise<app.ProjectDTO>;
+
+export function RenameProject(arg1:string,arg2:string):Promise<app.ProjectDTO>;
 
 export function RenameSession(arg1:string,arg2:string):Promise<void>;
 
 export function ResolveApproval(arg1:app.ApprovalResolution):Promise<void>;
+
+export function RevealProject(arg1:string):Promise<void>;
+
+export function SaveMCPServer(arg1:app.MCPServerInput):Promise<Array<app.MCPServerDTO>>;
 
 export function SaveModelProfile(arg1:app.ModelProfileInput):Promise<app.ModelCatalog>;
 
@@ -47,6 +67,8 @@ export function SelectDirectory(arg1:string):Promise<string>;
 export function SelectModelProfile(arg1:string):Promise<app.ModelCatalog>;
 
 export function SendMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<app.AgentTurnDTO>;
+
+export function SetProjectPinned(arg1:string,arg2:boolean):Promise<app.ProjectDTO>;
 
 export function Settings():Promise<config.Config>;
 

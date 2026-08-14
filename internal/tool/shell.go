@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/klaude/klaude/internal/executor"
-	"github.com/klaude/klaude/internal/sandbox"
+	"github.com/kk-2004/klaude/internal/executor"
+	"github.com/kk-2004/klaude/internal/sandbox"
 )
 
 // ShellTool 在工作区执行有界非交互命令；默认 Destructive + RequiresApproval，须经审批。

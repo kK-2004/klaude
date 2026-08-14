@@ -5,11 +5,9 @@ import { AppShell } from './components/AppShell'
 import { ErrorPage } from './pages/ErrorPage'
 import { HomePage } from './pages/HomePage'
 import { LoadingPage } from './pages/LoadingPage'
-import { PluginsPage } from './pages/PluginsPage'
-import { PullRequestsPage } from './pages/PullRequestsPage'
+import { McpPage } from './pages/McpPage'
 import { ScheduledPage } from './pages/ScheduledPage'
 import { SettingsPage } from './pages/SettingsPage'
-import { SitesPage } from './pages/SitesPage'
 
 export default function App() {
   const controller = useAppController()
@@ -27,10 +25,8 @@ function AppView() {
   return (
     <AppShell>
       {page === 'home' && <HomePage />}
-      {page === 'pull-requests' && <PullRequestsPage />}
-      {page === 'sites' && <SitesPage />}
+      {page === 'mcp' && <McpPage />}
       {page === 'scheduled' && <ScheduledPage />}
-      {page === 'plugins' && <PluginsPage />}
       {page === 'settings' && <SettingsPage />}
     </AppShell>
   )

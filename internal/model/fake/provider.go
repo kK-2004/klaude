@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/klaude/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/model"
 )
 
 // Provider 按 Calls 下标依次吐出预设 Streams，耗尽后返回 fixture_exhausted。

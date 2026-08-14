@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/klaude/klaude/internal/sandbox"
+	"github.com/kk-2004/klaude/internal/sandbox"
 )
 
 func TestSyntheticSIDStringStable(t *testing.T) {

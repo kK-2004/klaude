@@ -18,7 +18,8 @@ export const backend = {
   revealProject: (projectId: string) => call<void>('RevealProject', projectId),
   createSession: (projectId: string, title: string, provider: string, model: string) => call<Session>('CreateSession', projectId, title, provider, model),
   moveSession: (sessionId: string, projectId: string) => call<Session>('MoveSession', sessionId, projectId),
-  listSessions: (projectId: string) => call<Session[]>('ListSessions', projectId),
+	listSessions: (projectId: string) => call<Session[]>('ListSessions', projectId),
+	listRecentSessions: () => call<Session[]>('ListRecentSessions'),
   renameSession: (sessionId: string, title: string) => call<void>('RenameSession', sessionId, title),
   loadConversation: (sessionId: string) => call<ConversationSnapshot>('LoadConversation', sessionId),
   sendMessage: (sessionId: string, content: string, provider: string, model: string) => call<AgentTurn>('SendMessage', sessionId, content, provider, model),
@@ -39,6 +40,11 @@ export const backend = {
   saveModelProfile: (input: ModelProfileInput) => call<ModelCatalog>('SaveModelProfile', input),
   selectModelProfile: (profileId: string) => call<ModelCatalog>('SelectModelProfile', profileId),
   testModelConnection: (input: ModelProfileInput) => call<ModelConnectionResult>('TestModelConnection', input),
+  mcpServers: () => call<MCPServer[]>('MCPServers'),
+  saveMCPServer: (input: MCPServerInput) => call<MCPServer[]>('SaveMCPServer', input),
+  deleteMCPServer: (id: string) => call<MCPServer[]>('DeleteMCPServer', id),
+  connectMCPServer: (id: string) => call<MCPServer[]>('ConnectMCPServer', id),
+  disconnectMCPServer: (id: string) => call<MCPServer[]>('DisconnectMCPServer', id),
 }
 
 export type Platform = 'darwin' | 'windows' | 'linux'
@@ -60,6 +66,31 @@ export type ModelProfile = {
 export type ModelProfileInput = Omit<ModelProfile, 'hasApiKey'> & { apiKey: string }
 export type ModelCatalog = { activeId: string; profiles: ModelProfile[] }
 export type ModelConnectionResult = { success: boolean; latencyMs: number; message: string }
+export type MCPTransport = 'streamable_http' | 'stdio'
+export type MCPTool = { name: string; description?: string }
+export type MCPServer = {
+  id: string
+  name: string
+  transport: MCPTransport
+  url?: string
+  command?: string
+  args?: string[]
+  env?: string[]
+  enabled: boolean
+  status: 'connected' | 'disconnected' | 'error'
+  error?: string
+  tools?: MCPTool[]
+}
+export type MCPServerInput = {
+  id?: string
+  name: string
+  transport: MCPTransport
+  url?: string
+  command?: string
+  args?: string[]
+  env?: string[]
+  enabled: boolean
+}
 export type BackendSettings = {
   UI?: { Theme?: string }
   Agent?: { ParallelTools?: boolean; LLMSchedule?: boolean; MaxTurns?: number; ContextBudgetChars?: number; ToolResultChars?: number }

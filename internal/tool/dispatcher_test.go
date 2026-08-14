@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/klaude/klaude/internal/approval"
-	"github.com/klaude/klaude/internal/permission"
+	"github.com/kk-2004/klaude/internal/approval"
+	"github.com/kk-2004/klaude/internal/permission"
 )
 
 func TestDispatcherDeniesWithoutExecuting(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/klaude/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/storage"
 )
 
 type Manager struct {

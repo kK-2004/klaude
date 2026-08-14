@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/klaude/klaude/internal/agent"
-	"github.com/klaude/klaude/internal/filesystem"
-	"github.com/klaude/klaude/internal/sandbox"
-	"github.com/klaude/klaude/internal/storage"
-	"github.com/klaude/klaude/internal/tool"
+	"github.com/kk-2004/klaude/internal/agent"
+	"github.com/kk-2004/klaude/internal/filesystem"
+	"github.com/kk-2004/klaude/internal/sandbox"
+	"github.com/kk-2004/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/tool"
 )
 
 // ProjectTools is a per-turn / per-root tool registry with metadata lookup for the scheduler.
@@ -78,6 +78,13 @@ func (c *Composition) NewProjectTools(root, turnID string) (ProjectTools, error)
 		MaxOutput: maxOutput,
 	}, &shell); err != nil {
 		return ProjectTools{}, err
+	}
+	if c.MCP != nil {
+		for _, item := range c.MCP.Tools() {
+			if err := registry.Register(item); err != nil {
+				return ProjectTools{}, err
+			}
+		}
 	}
 	return ProjectTools{Registry: registry, Lookup: registryLookup{registry: registry}}, nil
 }

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/klaude/klaude/internal/config"
-	"github.com/klaude/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/config"
+	"github.com/kk-2004/klaude/internal/storage"
 )
 
 type memorySecrets struct{ values map[string]string }
@@ -40,7 +40,7 @@ func TestModelProfilePersistsMetadataAndCredentialReference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if catalog.ActiveID != "custom-openai" || len(catalog.Profiles) != 2 || !catalog.Profiles[1].HasAPIKey {
+	if catalog.ActiveID != "custom-openai" || len(catalog.Profiles) != 1 || !catalog.Profiles[0].HasAPIKey {
 		t.Fatalf("catalog = %+v", catalog)
 	}
 	if secrets.values["model-custom-openai"] != "plaintext-secret" {

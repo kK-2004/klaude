@@ -1,8 +1,8 @@
 import type { Message } from '../types/backend'
 import type { Capability, FileChange, FileEntry, Project, Session } from '../types/backend'
-import type { ApprovalMode, ModelCatalog, ModelConnectionResult, ModelProfileInput, Platform } from '../lib/backend'
+import type { ApprovalMode, MCPServer, MCPServerInput, ModelCatalog, ModelConnectionResult, ModelProfileInput, Platform } from '../lib/backend'
 
-export type AppPage = 'home' | 'pull-requests' | 'sites' | 'scheduled' | 'plugins' | 'settings'
+export type AppPage = 'home' | 'mcp' | 'scheduled' | 'settings'
 export type AppState = 'loading' | 'ready' | 'diagnostic' | 'fatal'
 export type PendingApproval = {
   id: string
@@ -31,6 +31,12 @@ export type AppController = {
   setSelectedChange: (change?: FileChange) => void
   model: string
   modelCatalog: ModelCatalog
+  mcpServers: MCPServer[]
+  refreshMCPServers: () => Promise<void>
+  saveMCPServer: (input: MCPServerInput) => Promise<boolean>
+  deleteMCPServer: (id: string) => Promise<boolean>
+  connectMCPServer: (id: string) => Promise<boolean>
+  disconnectMCPServer: (id: string) => Promise<boolean>
   selectModelProfile: (profileId: string) => Promise<boolean>
   saveModelProfile: (input: ModelProfileInput) => Promise<ModelCatalog | undefined>
   testModelConnection: (input: ModelProfileInput) => Promise<ModelConnectionResult>
@@ -51,15 +57,14 @@ export type AppController = {
   usage: { input?: number; output?: number }
   platform: Platform
   project?: Project
-  projects: Project[]
-  sessions: Session[]
+	projects: Project[]
+	sessions: Session[]
+	recentSessions: Session[]
   session?: Session
   files: FileEntry[]
   capabilities: Capability[]
   messages: Message[]
   groupedChanges: Record<string, FileChange[]>
-  setupDone: number
-  setupTotal: number
   openProject: () => Promise<void>
   chooseProjectForSession: () => Promise<void>
   closeProject: () => void

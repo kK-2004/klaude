@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -81,6 +82,41 @@ func TestCreateTurnWithUserMessageIsAtomicAndEnforcesOneActiveTurn(t *testing.T)
 	}
 	if messages != 1 {
 		t.Fatalf("message count = %d, want 1", messages)
+	}
+}
+
+func TestListRecentSessionsReturnsGlobalLatestTen(t *testing.T) {
+	db, ctx := openTestDB(t)
+	now := time.Now().UTC()
+	projects := []Project{
+		{ID: NewID(), Name: "one", RootPath: t.TempDir(), CreatedAt: now, UpdatedAt: now},
+		{ID: NewID(), Name: "two", RootPath: t.TempDir(), CreatedAt: now, UpdatedAt: now},
+	}
+	for _, project := range projects {
+		if err := db.CreateProject(ctx, project); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for index := 0; index < 12; index++ {
+		project := projects[index%len(projects)]
+		created := now.Add(time.Duration(index) * time.Second)
+		if err := db.CreateSession(ctx, Session{ID: NewID(), ProjectID: project.ID, Title: fmt.Sprintf("session-%02d", index), Provider: "fake", Model: "fixture", CreatedAt: created, UpdatedAt: created}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	recent, err := db.ListRecentSessions(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 10 {
+		t.Fatalf("recent session count = %d, want 10", len(recent))
+	}
+	if recent[0].Title != "session-11" || recent[9].Title != "session-02" {
+		t.Fatalf("recent sessions are not globally sorted and limited: first=%q last=%q", recent[0].Title, recent[9].Title)
+	}
+	if recent[0].ProjectID == recent[1].ProjectID {
+		t.Fatalf("recent sessions should include sessions from multiple projects: %+v", recent[:2])
 	}
 }
 

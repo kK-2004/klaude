@@ -1,7 +1,10 @@
 .PHONY: dev preview test lint typecheck build package clean
 
+WAILS ?= $(shell go env GOPATH)/bin/wails
+GO_BUILD_ENV = GOCACHE=$(CURDIR)/.cache/go-build GOPATH=$(CURDIR)/.cache/go-path GOMODCACHE=$(CURDIR)/.cache/go-mod
+
 dev:
-	wails dev
+	$(WAILS) dev
 
 preview:
 	npm --prefix frontend run dev
@@ -22,7 +25,7 @@ build:
 	go build ./cmd/klaude
 
 package:
-	wails build
+	$(GO_BUILD_ENV) $(WAILS) build
 
 clean:
 	rm -rf frontend/dist build bin

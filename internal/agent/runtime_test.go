@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	agentcontext "github.com/klaude/klaude/internal/context"
-	"github.com/klaude/klaude/internal/event"
-	"github.com/klaude/klaude/internal/model"
+	agentcontext "github.com/kk-2004/klaude/internal/context"
+	"github.com/kk-2004/klaude/internal/event"
+	"github.com/kk-2004/klaude/internal/model"
 )
 
 type fakeProvider struct {

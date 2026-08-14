@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/klaude/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/model"
 )
 
 // Manager 按字符预算裁剪对话：系统指令优先保留，历史从最近往前装，

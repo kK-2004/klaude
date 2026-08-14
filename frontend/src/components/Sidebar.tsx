@@ -1,51 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  AtSign, Check, ChevronDown, Folder, FolderOpen, FolderSearch, GitPullRequest,
-  LayoutGrid, ListChecks, MessageSquare, Moon, PanelLeft, PencilLine, Pin, PinOff,
-  Plus, Search, Settings, Sun, Trash2, User,
+  Cable, Folder, FolderOpen, FolderSearch, MessageSquare, PanelLeft, PencilLine, Pin, PinOff,
+  Plus, Search, Settings, Trash2, User,
 } from 'lucide-react'
 import { useApp } from '../app/use-app'
 import type { AppPage } from '../app/types'
 import type { Project } from '../types/backend'
-import { useThemeStore } from '../stores/theme'
 import { ContextMenu } from './ContextMenu'
 import type { ContextMenuItem } from './ContextMenu'
 
 const nav: { id: AppPage; label: string; icon: typeof Plus }[] = [
   { id: 'home', label: '新对话', icon: Plus },
-  { id: 'pull-requests', label: '拉取请求', icon: GitPullRequest },
-  { id: 'sites', label: '站点', icon: LayoutGrid },
-  { id: 'plugins', label: '插件', icon: AtSign },
+  { id: 'mcp', label: 'MCP', icon: Cable },
 ]
 
 export function Sidebar() {
   const {
-    page, setPage, startNewChat, project, projects, sessions, session, platform,
+	page, setPage, startNewChat, project, projects, sessions, recentSessions, session, platform,
     selectProject, selectSession, renameCurrentSession, openProject,
     renameProject, toggleProjectPinned, deleteProject, revealProject,
-    setupDone, setupTotal, model, messages, files, capabilities, setSidebarOpen,
+    setSidebarOpen,
   } = useApp()
-  const theme = useThemeStore((state) => state.theme)
-  const setTheme = useThemeStore((state) => state.setTheme)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [setupOpen, setSetupOpen] = useState(false)
   const [projectMenu, setProjectMenu] = useState<{ project: Project; x: number; y: number }>()
   const searchRef = useRef<HTMLInputElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (searchOpen) searchRef.current?.focus()
   }, [searchOpen])
-
-  useEffect(() => {
-    const onClick = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false)
-    }
-    window.addEventListener('mousedown', onClick)
-    return () => window.removeEventListener('mousedown', onClick)
-  }, [])
 
   const revealLabel = platform === 'windows' ? '在资源管理器中打开' : platform === 'darwin' ? '在 Finder 中打开' : '在文件管理器中打开'
   const projectMenuItems = (item: Project): ContextMenuItem[] => [
@@ -57,41 +40,17 @@ export function Sidebar() {
 
   const q = query.trim().toLowerCase()
   const visibleProjects = q ? projects.filter((item) => item.name.toLowerCase().includes(q) || item.rootPath.toLowerCase().includes(q)) : projects
-  const visibleSessions = q ? sessions.filter((item) => item.title.toLowerCase().includes(q)) : sessions
+	const visibleSessions = q ? sessions.filter((item) => item.title.toLowerCase().includes(q)) : sessions
+	const visibleRecentSessions = q ? recentSessions.filter((item) => item.title.toLowerCase().includes(q)) : recentSessions
 
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="brand-wrap" ref={menuRef}>
-          <button
-            type="button"
-            className="brand-button"
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            Klaude
-            <ChevronDown size={14} strokeWidth={2} />
-          </button>
-          {menuOpen && (
-            <div className="brand-menu">
-              <button type="button" onClick={() => { void openProject(); setMenuOpen(false) }}>
-                <FolderOpen size={14} /> 打开项目
-              </button>
-              <button type="button" onClick={() => { setPage('settings'); setMenuOpen(false) }}>
-                <Settings size={14} /> 设置
-              </button>
-              <button type="button" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setMenuOpen(false) }}>
-                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-                {theme === 'dark' ? '浅色外观' : '深色外观'}
-              </button>
-              <button type="button" onClick={() => { setSidebarOpen(false); setMenuOpen(false) }}>
-                <PanelLeft size={14} /> 收起侧栏
-              </button>
-            </div>
-          )}
-        </div>
+        <div className="brand-label">Klaude</div>
         <div className="header-actions">
+          <button type="button" className="icon-btn sidebar-collapse" aria-label="收起侧栏" onClick={() => setSidebarOpen(false)}>
+            <PanelLeft size={16} strokeWidth={1.75} />
+          </button>
           <button
             type="button"
             className="icon-btn"
@@ -173,7 +132,7 @@ export function Sidebar() {
       <section className="sidebar-section grow">
         <div className="section-label">最近</div>
         <div className="recent-list">
-          {visibleSessions.slice(0, 6).map((item) => (
+		  {visibleRecentSessions.slice(0, 10).map((item) => (
             <button key={item.id} type="button" className="recent-row" onClick={() => void selectSession(item)}>
               <MessageSquare size={13} strokeWidth={1.75} />
               {item.title}
@@ -183,28 +142,6 @@ export function Sidebar() {
       </section>
 
       <div className="sidebar-footer">
-        {setupDone < setupTotal && (
-          <button
-            type="button"
-            className="getting-started"
-            aria-expanded={setupOpen}
-            onClick={() => setSetupOpen((open) => !open)}
-          >
-            <ListChecks size={15} strokeWidth={1.75} />
-            <span className="setup-count">{setupDone}/{setupTotal}</span>
-            开始使用
-            <ChevronDown className="disclosure-icon" size={14} strokeWidth={1.75} aria-hidden />
-          </button>
-        )}
-        {setupOpen && (
-          <ul className="setup-list">
-            <li className={project ? 'done' : ''}><Check size={12} strokeWidth={2} /> 打开项目</li>
-            <li className={model !== 'not configured' ? 'done' : ''}><Check size={12} strokeWidth={2} /> 配置模型</li>
-            <li className={sessions.length > 0 ? 'done' : ''}><Check size={12} strokeWidth={2} /> 新建对话</li>
-            <li className={messages.length > 0 ? 'done' : ''}><Check size={12} strokeWidth={2} /> 发送消息</li>
-            <li className={files.length > 0 || capabilities.length > 0 ? 'done' : ''}><Check size={12} strokeWidth={2} /> 检查工作区</li>
-          </ul>
-        )}
         <div className="user-row">
           <span className="avatar"><User size={14} strokeWidth={1.75} /></span>
           <span className="user-name">Klaude</span>

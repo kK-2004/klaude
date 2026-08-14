@@ -5,15 +5,10 @@ import { useThemeStore } from '../stores/theme'
 import { useWorkspaceStore } from '../stores/workspace'
 import type { AgentEvent, FileChange, Project, Session } from '../types/backend'
 import type { AppController, AppPage, AppState, PendingApproval } from './types'
-import type { ApprovalMode, BackendSettings, ModelCatalog, ModelConnectionResult, ModelProfileInput, Platform, SettingsUpdate } from '../lib/backend'
-
-const previewModelCatalog: ModelCatalog = {
-  activeId: 'preview-openai',
-  profiles: [
-    { id: 'preview-openai', name: 'GPT-5.6-Sol', providerSpec: 'openai', apiMode: 'responses', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.6-sol', contextWindow: 400000, maxOutputTokens: 32768, temperature: 0.2, hasApiKey: false },
-    { id: 'preview-anthropic', name: 'Claude Sonnet', providerSpec: 'anthropic', apiMode: 'messages', baseUrl: 'https://api.anthropic.com/v1', model: 'claude-sonnet', contextWindow: 200000, maxOutputTokens: 16384, temperature: 0.2, hasApiKey: false },
-  ],
-}
+import type { ApprovalMode, BackendSettings, MCPServer, MCPServerInput, ModelCatalog, ModelConnectionResult, ModelProfileInput, Platform, SettingsUpdate } from '../lib/backend'
+import { emptyModelCatalog } from './model-state'
+import { removeProject } from './project-state'
+import { draftConversationState } from './session-state'
 
 function isBackendUnavailable(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
@@ -56,10 +51,11 @@ export function useAppController(): AppController {
   const [approval, setApproval] = useState<PendingApproval>()
   const [changes, setChanges] = useState<FileChange[]>([])
   const [selectedChange, setSelectedChange] = useState<FileChange>()
-  const [model, setModel] = useState('not configured')
-  const [modelCatalog, setModelCatalog] = useState<ModelCatalog>(previewModelCatalog)
-  const [endpoint, setEndpoint] = useState('https://api.openai.com/v1')
-  const [credentialEnv, setCredentialEnv] = useState('OPENAI_API_KEY')
+  const [model, setModel] = useState('')
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalog>(emptyModelCatalog)
+  const [mcpServers, setMCPServers] = useState<MCPServer[]>([])
+  const [endpoint, setEndpoint] = useState('')
+  const [credentialEnv, setCredentialEnv] = useState('')
   const [contextLimit, setContextLimit] = useState('120000')
   const [turnLimit, setTurnLimit] = useState('50')
   const [parallelTools, setParallelTools] = useState(false)
@@ -69,16 +65,18 @@ export function useAppController(): AppController {
   const [usage, setUsage] = useState<{ input?: number; output?: number }>({})
   const [platform, setPlatform] = useState<Platform>(detectPlatform)
 
-  const project = useWorkspaceStore((state) => state.project)
-  const projects = useWorkspaceStore((state) => state.projects)
-  const sessions = useWorkspaceStore((state) => state.sessions)
+	const project = useWorkspaceStore((state) => state.project)
+	const projects = useWorkspaceStore((state) => state.projects)
+	const sessions = useWorkspaceStore((state) => state.sessions)
+	const recentSessions = useWorkspaceStore((state) => state.recentSessions)
   const session = useWorkspaceStore((state) => state.session)
   const files = useWorkspaceStore((state) => state.files)
   const capabilities = useWorkspaceStore((state) => state.capabilities)
   const messages = useWorkspaceStore((state) => state.messages)
   const setProject = useWorkspaceStore((state) => state.setProject)
-  const setProjects = useWorkspaceStore((state) => state.setProjects)
-  const setSessions = useWorkspaceStore((state) => state.setSessions)
+	const setProjects = useWorkspaceStore((state) => state.setProjects)
+	const setSessions = useWorkspaceStore((state) => state.setSessions)
+	const setRecentSessions = useWorkspaceStore((state) => state.setRecentSessions)
   const setSession = useWorkspaceStore((state) => state.setSession)
   const setFiles = useWorkspaceStore((state) => state.setFiles)
   const setCapabilities = useWorkspaceStore((state) => state.setCapabilities)
@@ -99,9 +97,11 @@ export function useAppController(): AppController {
         setDiagnostic('应用以只读诊断模式启动。')
         return
       }
-      const [recentProjects, caps, settings, catalog] = await Promise.all([
-        backend.listProjects(), backend.capabilities(), backend.settings().catch(() => undefined), backend.modelProfiles().catch(() => undefined),
-      ])
+		const [recentProjects, globalRecentSessions, caps, settings, catalog, configuredMCPServers] = await Promise.all([
+			backend.listProjects(), backend.listRecentSessions(), backend.capabilities(), backend.settings().catch(() => undefined), backend.modelProfiles().catch(() => undefined), backend.mcpServers().catch(() => []),
+		])
+		setRecentSessions(globalRecentSessions)
+      setMCPServers(configuredMCPServers)
       if (catalog) {
         setModelCatalog(catalog)
         const activeProfile = catalog.profiles.find((profile) => profile.id === catalog.activeId)
@@ -134,8 +134,9 @@ export function useAppController(): AppController {
         }
         setFiles(await backend.browseProject(selected.rootPath, '.'))
       } else {
-        setProject(undefined)
-        setSessions([])
+		setProject(undefined)
+		setSessions([])
+		setRecentSessions([])
         setSession(undefined)
         setMessages([])
         setFiles([])
@@ -144,8 +145,9 @@ export function useAppController(): AppController {
     } catch (error) {
       const message = errorMessage(error)
       if (isBackendUnavailable(error)) {
-        setModelCatalog(previewModelCatalog)
-        setModel(previewModelCatalog.profiles[0].model)
+        setModelCatalog(emptyModelCatalog)
+        setMCPServers([])
+        setModel('')
         setProject(undefined)
         setProjects([])
         setSession(undefined)
@@ -159,14 +161,14 @@ export function useAppController(): AppController {
         setDiagnostic(message)
       }
     }
-  }, [setCapabilities, setFiles, setMessages, setProject, setProjects, setSession, setSessions])
+	}, [setCapabilities, setFiles, setMessages, setProject, setProjects, setRecentSessions, setSession, setSessions])
 
   useEffect(() => { void initialize() }, [initialize])
 
   useEffect(() => {
     const unsubscribe = window.runtime?.EventsOn?.('klaude:agent-event', (event: AgentEvent) => {
       applyEvent(event)
-      const payload = event.payload as { delta?: string; text?: string; inputTokens?: number; outputTokens?: number; approval?: PendingApproval } | undefined
+      const payload = event.payload as { delta?: string; text?: string; message?: string; inputTokens?: number; outputTokens?: number; approval?: PendingApproval } | undefined
       if (payload?.delta || payload?.text) appendAssistantDelta(payload.delta ?? payload.text ?? '')
       if (payload?.approval) setApproval(payload.approval)
       if (payload?.inputTokens !== undefined || payload?.outputTokens !== undefined) setUsage({ input: payload.inputTokens, output: payload.outputTokens })
@@ -175,7 +177,11 @@ export function useAppController(): AppController {
       if (event.type.endsWith('finished')) { setTurnStatus('completed'); setRunning(false) }
       if (event.type.endsWith('cancelled')) { setTurnStatus('cancelled'); setRunning(false) }
       if (event.type.endsWith('failed')) { setTurnStatus('failed'); setRunning(false) }
-      if (event.type.endsWith('error')) { setTurnStatus('failed'); setRunning(false) }
+      if (event.type.endsWith('error')) {
+        setTurnStatus('failed')
+        setRunning(false)
+        if (payload?.message) setDiagnostic(payload.message)
+      }
     })
     return unsubscribe
   }, [appendAssistantDelta, applyEvent])
@@ -190,16 +196,18 @@ export function useAppController(): AppController {
   const loadProjectWorkspace = useCallback(async (item: Project, options: { session?: Session; keepDraft?: boolean } = {}) => {
     setProject(item)
     setPage('home')
-    const [entries, recentSessions] = await Promise.all([
+    const [entries, projectSessions, globalRecentSessions] = await Promise.all([
       backend.browseProject(item.rootPath, '.').catch(() => []),
       backend.listSessions(item.id).catch(() => []),
+      backend.listRecentSessions().catch(() => []),
     ])
     setFiles(entries)
-    setSessions(recentSessions)
+    setSessions(projectSessions)
+    setRecentSessions(globalRecentSessions)
     const preferred = options.session
     const next = preferred
-      ? recentSessions.find((entry) => entry.id === preferred.id) ?? preferred
-      : options.keepDraft ? undefined : recentSessions[0]
+      ? projectSessions.find((entry) => entry.id === preferred.id) ?? preferred
+      : options.keepDraft ? undefined : projectSessions[0]
     setSession(next)
     if (!next) {
       setMessages([])
@@ -210,7 +218,7 @@ export function useAppController(): AppController {
     } catch {
       setMessages([])
     }
-  }, [setFiles, setMessages, setProject, setSession, setSessions])
+  }, [setFiles, setMessages, setProject, setRecentSessions, setSession, setSessions])
 
   const closeProject = useCallback(() => {
     setProject(undefined)
@@ -246,23 +254,17 @@ export function useAppController(): AppController {
     }
   }, [loadProjectWorkspace, pickProjectDirectory])
 
-  // 输入框上的项目胶囊：草稿对话重选目录时改挂当前会话，避免跳到另一个项目的旧会话。
+  // 输入框上的项目胶囊只切换工作区，不创建或移动会话。
   const chooseProjectForSession = useCallback(async () => {
     try {
       const opened = await pickProjectDirectory()
       if (!opened) return
-      const draft = session && messages.length === 0 ? session : undefined
-      if (draft) {
-        const moved = draft.projectId === opened.id ? draft : await backend.moveSession(draft.id, opened.id)
-        await loadProjectWorkspace(opened, { session: moved })
-      } else {
-        await loadProjectWorkspace(opened, { keepDraft: true })
-      }
+      await loadProjectWorkspace(opened, { keepDraft: true })
       setAppState('ready')
     } catch (error) {
       setDiagnostic(errorMessage(error))
     }
-  }, [loadProjectWorkspace, messages.length, pickProjectDirectory, session])
+  }, [loadProjectWorkspace, pickProjectDirectory])
 
   const refreshProjects = useCallback(async (fallback: Project[]) => {
     try {
@@ -271,6 +273,14 @@ export function useAppController(): AppController {
       setProjects(sortProjects(fallback))
     }
   }, [setProjects])
+
+  const refreshRecentSessions = useCallback(async () => {
+    try {
+      setRecentSessions((await backend.listRecentSessions()).slice(0, 10))
+    } catch {
+      // 预览模式没有后端，保留当前内存列表。
+    }
+  }, [setRecentSessions])
 
   const renameProject = useCallback(async (item: Project) => {
     const name = window.prompt('重命名项目', item.name)?.trim()
@@ -311,13 +321,14 @@ export function useAppController(): AppController {
         return
       }
     }
-    const remaining = projects.filter((entry) => entry.id !== item.id)
-    await refreshProjects(remaining)
+    const remaining = removeProject(projects, item.id)
+    setProjects(remaining)
+    setRecentSessions(recentSessions.filter((entry) => entry.projectId !== item.id))
     if (project?.id !== item.id) return
     const next = remaining[0]
     if (next) await loadProjectWorkspace(next)
     else closeProject()
-  }, [closeProject, loadProjectWorkspace, project?.id, projects, refreshProjects])
+  }, [closeProject, loadProjectWorkspace, project?.id, projects, recentSessions, setProjects, setRecentSessions])
 
   const revealProject = useCallback(async (item: Project) => {
     try {
@@ -328,6 +339,11 @@ export function useAppController(): AppController {
   }, [])
 
   const selectSession = useCallback(async (next: Session) => {
+    const owner = projects.find((item) => item.id === next.projectId)
+    if (owner && owner.id !== project?.id) {
+      await loadProjectWorkspace(owner, { session: next })
+      return
+    }
     setSession(next)
     setPage('home')
     try {
@@ -335,11 +351,11 @@ export function useAppController(): AppController {
     } catch {
       setMessages([])
     }
-  }, [setMessages, setSession])
+  }, [loadProjectWorkspace, project?.id, projects, setMessages, setSession])
 
   const activeProviderName = useMemo(() => {
     const active = modelCatalog.profiles.find((profile) => profile.id === modelCatalog.activeId)
-    return `${active?.providerSpec ?? 'openai'}-compatible`
+    return active ? `${active.providerSpec}-compatible` : ''
   }, [modelCatalog])
 
   const createSession = useCallback(async (title = '新对话') => {
@@ -350,18 +366,23 @@ export function useAppController(): AppController {
     try {
       const created = await backend.createSession(project.id, title, activeProviderName, model)
       setSessions([created, ...sessions])
+      setRecentSessions([created, ...recentSessions.filter((item) => item.id !== created.id)].slice(0, 10))
       setSession(created)
       setMessages([])
     } catch (error) {
       setDiagnostic(error instanceof Error ? error.message : String(error))
     }
-  }, [activeProviderName, model, project, sessions, setMessages, setSession, setSessions])
+  }, [activeProviderName, model, project, recentSessions, sessions, setMessages, setRecentSessions, setSession, setSessions])
 
   const startNewChat = useCallback(async () => {
     setPage('home')
     setComposer('')
-    await createSession('新对话')
-  }, [createSession])
+    const draft = draftConversationState()
+    setSession(draft.session)
+    setMessages(draft.messages)
+    setChanges([])
+    setSelectedChange(undefined)
+  }, [setMessages, setSession])
 
   const renameCurrentSession = useCallback(async () => {
     if (!session) return
@@ -371,7 +392,8 @@ export function useAppController(): AppController {
     const renamed = { ...session, title }
     setSession(renamed)
     setSessions(sessions.map((item) => item.id === session.id ? renamed : item))
-  }, [session, sessions, setSession, setSessions])
+    setRecentSessions(recentSessions.map((item) => item.id === session.id ? renamed : item))
+  }, [recentSessions, session, sessions, setRecentSessions, setSession, setSessions])
 
   const browse = useCallback(async (path: string) => {
     if (!project) return
@@ -395,6 +417,7 @@ export function useAppController(): AppController {
         return
       }
       setSessions([active, ...sessions])
+      setRecentSessions([active, ...recentSessions.filter((item) => item.id !== active?.id)].slice(0, 10))
       setSession(active)
     }
     if (!active) {
@@ -411,12 +434,15 @@ export function useAppController(): AppController {
       const turn = await backend.sendMessage(active.id, text, activeProviderName, model)
       const nextChanges = await backend.turnChanges(turn.id).catch(() => [])
       setChanges(nextChanges)
+      await refreshRecentSessions()
     } catch (error) {
-      addMessage({ role: 'assistant', content: `无法开始此 Turn：${error instanceof Error ? error.message : String(error)}` })
+      const message = errorMessage(error)
+      addMessage({ role: 'assistant', content: `无法开始此 Turn：${message}` })
       setRunning(false)
-      setDiagnostic('发送前请先在设置中配置凭据引用。')
+      setTurnStatus('failed')
+      setDiagnostic(message)
     }
-  }, [activeProviderName, addMessage, composer, model, project, running, session, sessions, setSession, setSessions])
+  }, [activeProviderName, addMessage, composer, model, project, recentSessions, refreshRecentSessions, running, session, sessions, setRecentSessions, setSession, setSessions])
 
   const stopAgent = useCallback(async () => {
     if (session) await backend.cancelAgent(session.id).catch(() => undefined)
@@ -466,8 +492,8 @@ export function useAppController(): AppController {
   const persistSettings = useCallback(async (overrides: Partial<SettingsUpdate> = {}) => {
     const payload = settingsPayload(overrides)
     const saved = await backend.updateSettings(payload)
-    if (saved?.Provider?.Endpoint) setEndpoint(saved.Provider.Endpoint)
-    if (saved?.Provider?.Model) setModel(saved.Provider.Model)
+    setEndpoint(saved?.Provider?.Endpoint ?? '')
+    setModel(saved?.Provider?.Model ?? '')
     setCredentialEnv(saved?.Provider?.CredentialEnv ?? '')
     if (saved?.Agent?.ContextBudgetChars) setContextLimit(String(saved.Agent.ContextBudgetChars))
     if (saved?.Agent?.MaxTurns) setTurnLimit(String(saved.Agent.MaxTurns))
@@ -490,6 +516,56 @@ export function useAppController(): AppController {
       setDiagnostic(message)
     }
   }, [persistSettings])
+
+  const refreshMCPServers = useCallback(async () => {
+    try {
+      setMCPServers(await backend.mcpServers())
+    } catch (error) {
+      if (!isBackendUnavailable(error)) setDiagnostic(errorMessage(error))
+    }
+  }, [])
+
+  const saveMCPServer = useCallback(async (input: MCPServerInput) => {
+    try {
+      setMCPServers(await backend.saveMCPServer(input))
+      return true
+    } catch (error) {
+      setDiagnostic(errorMessage(error))
+      return false
+    }
+  }, [])
+
+  const deleteMCPServer = useCallback(async (id: string) => {
+    try {
+      setMCPServers(await backend.deleteMCPServer(id))
+      return true
+    } catch (error) {
+      setDiagnostic(errorMessage(error))
+      return false
+    }
+  }, [])
+
+  const connectMCPServer = useCallback(async (id: string) => {
+    try {
+      setMCPServers(await backend.connectMCPServer(id))
+      return true
+    } catch (error) {
+      const message = errorMessage(error)
+      setDiagnostic(message)
+      try { setMCPServers(await backend.mcpServers()) } catch { /* keep the error state */ }
+      return false
+    }
+  }, [])
+
+  const disconnectMCPServer = useCallback(async (id: string) => {
+    try {
+      setMCPServers(await backend.disconnectMCPServer(id))
+      return true
+    } catch (error) {
+      setDiagnostic(errorMessage(error))
+      return false
+    }
+  }, [])
 
   const selectModelProfile = useCallback(async (profileId: string) => {
     const previousCatalog = modelCatalog
@@ -586,15 +662,6 @@ export function useAppController(): AppController {
     [changes],
   )
 
-  const setupTotal = 5
-  const setupDone = [
-    Boolean(project),
-    model !== 'not configured',
-    sessions.length > 0,
-    messages.length > 0,
-    capabilities.length > 0 || files.length > 0,
-  ].filter(Boolean).length
-
   return {
     appState,
     diagnostic,
@@ -613,6 +680,12 @@ export function useAppController(): AppController {
     setSelectedChange,
     model,
     modelCatalog,
+    mcpServers,
+    refreshMCPServers,
+    saveMCPServer,
+    deleteMCPServer,
+    connectMCPServer,
+    disconnectMCPServer,
     selectModelProfile,
     saveModelProfile,
     testModelConnection,
@@ -635,13 +708,12 @@ export function useAppController(): AppController {
     project,
     projects,
     sessions,
+    recentSessions,
     session,
     files,
     capabilities,
     messages,
     groupedChanges,
-    setupDone,
-    setupTotal,
     openProject,
     chooseProjectForSession,
     closeProject,

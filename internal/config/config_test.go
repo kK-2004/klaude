@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kk-2004/klaude/internal/mcp"
 )
 
 func TestLayeredConfigAndInstructions(t *testing.T) {
@@ -64,6 +66,16 @@ func TestAgentScheduleFlagsDefaultOff(t *testing.T) {
 	}
 }
 
+func TestDefaultsDoNotSelectAModel(t *testing.T) {
+	cfg := Defaults()
+	if cfg.DefaultModel != "" {
+		t.Fatalf("default model = %q, want empty", cfg.DefaultModel)
+	}
+	if cfg.Provider.Model != "" {
+		t.Fatalf("provider model = %q, want empty", cfg.Provider.Model)
+	}
+}
+
 func TestSaveAndReloadParallelFlags(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	cfg := Defaults()
@@ -97,5 +109,18 @@ func TestSaveNeverPersistsPlaintextAPIKey(t *testing.T) {
 	loaded := Load(path, "")
 	if loaded.Config.Provider.CredentialKey != "model-test" || loaded.Config.Provider.CredentialEnv != "" {
 		t.Fatalf("credential reference = %+v", loaded.Config.Provider)
+	}
+}
+
+func TestSaveAndReloadMCPDefinitions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	cfg := Defaults()
+	cfg.MCPServers = []mcp.Definition{{ID: "files", Name: "Files", Transport: mcp.TransportStdio, Command: "npx", Args: []string{"-y", "server"}, Env: []string{"API_KEY"}, Enabled: true}}
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded := Load(path, "")
+	if len(loaded.Config.MCPServers) != 1 || loaded.Config.MCPServers[0].Command != "npx" || loaded.Config.MCPServers[0].Args[1] != "server" || !loaded.Config.MCPServers[0].Enabled {
+		t.Fatalf("loaded MCP servers = %+v, warnings=%v", loaded.Config.MCPServers, loaded.Warnings)
 	}
 }

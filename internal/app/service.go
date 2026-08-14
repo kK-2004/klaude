@@ -9,16 +9,18 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/klaude/klaude/internal/agent"
-	"github.com/klaude/klaude/internal/approval"
-	"github.com/klaude/klaude/internal/config"
-	"github.com/klaude/klaude/internal/filesystem"
-	gitservice "github.com/klaude/klaude/internal/git"
-	"github.com/klaude/klaude/internal/project"
-	"github.com/klaude/klaude/internal/secret"
-	"github.com/klaude/klaude/internal/session"
-	"github.com/klaude/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/agent"
+	"github.com/kk-2004/klaude/internal/approval"
+	"github.com/kk-2004/klaude/internal/config"
+	"github.com/kk-2004/klaude/internal/event"
+	"github.com/kk-2004/klaude/internal/filesystem"
+	gitservice "github.com/kk-2004/klaude/internal/git"
+	"github.com/kk-2004/klaude/internal/project"
+	"github.com/kk-2004/klaude/internal/secret"
+	"github.com/kk-2004/klaude/internal/session"
+	"github.com/kk-2004/klaude/internal/storage"
 )
 
 // Service 是面向桌面壳（Wails）的窄应用边界：只管生命周期与编排，
@@ -81,7 +83,9 @@ func (s *Service) Startup(appContext context.Context) {
 		// Wails lifecycle contexts carry an events bridge. Plain contexts used by
 		// tests and headless callers must not be passed to runtime.EventsEmit.
 		if appContext != nil && appContext.Value("events") != nil {
-			composition.Events.Subscribe(NewEventBridge().Forward)
+			bridge := NewEventBridge()
+			bridge.Context = appContext
+			composition.Events.Subscribe(bridge.Forward)
 		}
 	}
 	s.mu.Lock()
@@ -168,7 +172,11 @@ func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
 		return err
 	}
 	for _, item := range sessions {
-		s.sessions.Cancel(item.ID)
+		if s.sessions.Cancel(item.ID) {
+			waitContext, cancel := context.WithTimeout(ctx, 2*time.Second)
+			_ = s.sessions.Wait(waitContext, item.ID)
+			cancel()
+		}
 	}
 	return s.db.DeleteProject(ctx, projectID)
 }
@@ -212,6 +220,9 @@ func (s *Service) CreateSession(ctx context.Context, projectID, title, providerN
 	if modelName == "" {
 		modelName = s.config.Config.Provider.Model
 	}
+	if strings.TrimSpace(modelName) == "" {
+		return storage.Session{}, errors.New("请先在设置中配置模型")
+	}
 	return s.sessions.Create(ctx, projectID, title, providerName, modelName)
 }
 
@@ -220,6 +231,13 @@ func (s *Service) ListSessions(ctx context.Context, projectID string) ([]storage
 		return nil, errors.New("application is not initialized")
 	}
 	return s.sessions.List(ctx, projectID)
+}
+
+func (s *Service) ListRecentSessions(ctx context.Context) ([]storage.Session, error) {
+	if s.db == nil {
+		return nil, errors.New("application is not initialized")
+	}
+	return s.db.ListRecentSessions(ctx, 10)
 }
 
 func (s *Service) RenameSession(ctx context.Context, sessionID, title string) error {
@@ -282,10 +300,10 @@ func (s *Service) UpdateSettings(_ context.Context, update SettingsUpdate) (conf
 	update.Endpoint = strings.TrimSpace(update.Endpoint)
 	update.Model = strings.TrimSpace(update.Model)
 	update.CredentialEnv = strings.TrimSpace(update.CredentialEnv)
-	if update.Endpoint == "" || update.Model == "" {
-		return config.Config{}, errors.New("provider endpoint and model are required")
+	if update.Endpoint == "" {
+		return config.Config{}, errors.New("provider endpoint is required")
 	}
-	if update.CredentialEnv == "" && cfg.Provider.CredentialKey == "" {
+	if update.Model != "" && update.CredentialEnv == "" && cfg.Provider.CredentialKey == "" {
 		return config.Config{}, errors.New("provider credential is required")
 	}
 	if update.CredentialEnv != "" && !credentialEnvPattern.MatchString(update.CredentialEnv) {
@@ -301,7 +319,11 @@ func (s *Service) UpdateSettings(_ context.Context, update SettingsUpdate) (conf
 	if update.CredentialEnv != "" {
 		cfg.Provider.CredentialKey = ""
 	}
-	cfg.DefaultModel = cfg.Provider.Name + ":" + cfg.Provider.Model
+	if cfg.Provider.Model == "" {
+		cfg.DefaultModel = ""
+	} else {
+		cfg.DefaultModel = cfg.Provider.Name + ":" + cfg.Provider.Model
+	}
 	cfg.Agent.ContextBudgetChars = update.ContextBudgetChars
 	cfg.Agent.MaxTurns = update.MaxTurns
 	cfg.Agent.ParallelTools = update.ParallelTools
@@ -385,6 +407,9 @@ func (s *Service) SendMessage(ctx context.Context, sessionID, content, providerN
 	if modelName == "" {
 		modelName = s.config.Config.Provider.Model
 	}
+	if strings.TrimSpace(modelName) == "" {
+		return storage.AgentTurn{}, errors.New("请先在设置中配置模型")
+	}
 	if err := s.db.UpdateSessionProviderModel(ctx, sessionID, providerName, modelName); err != nil {
 		return storage.AgentTurn{}, err
 	}
@@ -402,6 +427,9 @@ func (s *Service) SendMessage(ctx context.Context, sessionID, content, providerN
 			defer s.sessions.Done(sessionID)
 			if runErr := s.startTurn(runContext, sessionID, turn.ID); runErr != nil {
 				_ = s.db.UpdateTurnStatus(context.Background(), turn.ID, storage.TurnFailed, "runtime_error", runErr.Error())
+				if s.composition != nil && s.composition.Events != nil {
+					_ = s.composition.Events.Publish(context.Background(), sessionID, turn.ID, event.AgentError, map[string]string{"code": "runtime_error", "message": runErr.Error()})
+				}
 			}
 		}()
 	}

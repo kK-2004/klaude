@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/klaude/klaude/internal/config"
-	"github.com/klaude/klaude/internal/model"
+	"github.com/kk-2004/klaude/internal/config"
+	"github.com/kk-2004/klaude/internal/model"
 )
 
 func TestProviderUsesMessagesProtocolAndParsesStream(t *testing.T) {

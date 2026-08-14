@@ -157,7 +157,7 @@ export function ModelSettings() {
                   })}
                   {filteredProfiles.length === 0 && <div className="model-profile-no-results">没有匹配的模型配置</div>}
                 </div>
-                {profileListScrollable && <span className="model-scroll-track" aria-hidden="true"><span style={{ height: profileScrollbar.height, transform: `translateY(${profileScrollbar.top}px)` }} /></span>}
+                {profileListScrollable && <span className="model-scroll-track" aria-hidden="true"><span style={{ height: profileScrollbar.height, top: profileScrollbar.top }} /></span>}
               </div>
             </div>
           )}

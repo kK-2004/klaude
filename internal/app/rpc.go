@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/klaude/klaude/internal/config"
-	"github.com/klaude/klaude/internal/filesystem"
-	gitservice "github.com/klaude/klaude/internal/git"
-	"github.com/klaude/klaude/internal/project"
-	"github.com/klaude/klaude/internal/storage"
+	"github.com/kk-2004/klaude/internal/config"
+	"github.com/kk-2004/klaude/internal/filesystem"
+	gitservice "github.com/kk-2004/klaude/internal/git"
+	"github.com/kk-2004/klaude/internal/project"
+	"github.com/kk-2004/klaude/internal/storage"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -24,6 +24,24 @@ type RPCService struct {
 func NewRPCService(service *Service) *RPCService { return &RPCService{service: service} }
 
 func (r *RPCService) Health() HealthResponse { return r.service.Health() }
+
+func (r *RPCService) MCPServers() []MCPServerDTO { return r.service.MCPServers() }
+
+func (r *RPCService) SaveMCPServer(input MCPServerInput) ([]MCPServerDTO, error) {
+	return r.service.SaveMCPServer(context.Background(), input)
+}
+
+func (r *RPCService) DeleteMCPServer(id string) ([]MCPServerDTO, error) {
+	return r.service.DeleteMCPServer(context.Background(), id)
+}
+
+func (r *RPCService) ConnectMCPServer(id string) ([]MCPServerDTO, error) {
+	return r.service.ConnectMCPServer(context.Background(), id)
+}
+
+func (r *RPCService) DisconnectMCPServer(id string) ([]MCPServerDTO, error) {
+	return r.service.DisconnectMCPServer(id)
+}
 
 type ProjectDTO struct {
 	ID        string `json:"id"`
@@ -125,6 +143,11 @@ func (r *RPCService) CreateSession(projectID, title, providerName, modelName str
 
 func (r *RPCService) ListSessions(projectID string) ([]SessionDTO, error) {
 	sessions, err := r.service.ListSessions(context.Background(), projectID)
+	return mapSessions(sessions), err
+}
+
+func (r *RPCService) ListRecentSessions() ([]SessionDTO, error) {
+	sessions, err := r.service.ListRecentSessions(context.Background())
 	return mapSessions(sessions), err
 }
 

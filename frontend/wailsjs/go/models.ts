@@ -158,6 +158,7 @@ export namespace app {
 	    ready: boolean;
 	    product: string;
 	    version: string;
+	    platform: string;
 
 	    static createFrom(source: any = {}) {
 	        return new HealthResponse(source);
@@ -168,8 +169,100 @@ export namespace app {
 	        this.ready = source["ready"];
 	        this.product = source["product"];
 	        this.version = source["version"];
+	        this.platform = source["platform"];
 	    }
 	}
+	export class MCPToolDTO {
+	    name: string;
+	    description?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new MCPToolDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	    }
+	}
+	export class MCPServerDTO {
+	    id: string;
+	    name: string;
+	    transport: string;
+	    url?: string;
+	    command?: string;
+	    args?: string[];
+	    env?: string[];
+	    enabled: boolean;
+	    status: string;
+	    error?: string;
+	    tools?: MCPToolDTO[];
+
+	    static createFrom(source: any = {}) {
+	        return new MCPServerDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.transport = source["transport"];
+	        this.url = source["url"];
+	        this.command = source["command"];
+	        this.args = source["args"];
+	        this.env = source["env"];
+	        this.enabled = source["enabled"];
+	        this.status = source["status"];
+	        this.error = source["error"];
+	        this.tools = this.convertValues(source["tools"], MCPToolDTO);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MCPServerInput {
+	    id: string;
+	    name: string;
+	    transport: string;
+	    url: string;
+	    command: string;
+	    args: string[];
+	    env: string[];
+	    enabled: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new MCPServerInput(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.transport = source["transport"];
+	        this.url = source["url"];
+	        this.command = source["command"];
+	        this.args = source["args"];
+	        this.env = source["env"];
+	        this.enabled = source["enabled"];
+	    }
+	}
+
 
 	export class ModelProfile {
 	    id: string;
@@ -285,6 +378,7 @@ export namespace app {
 	    name: string;
 	    rootPath: string;
 	    gitRoot?: string;
+	    pinned: boolean;
 	    createdAt: string;
 	    updatedAt: string;
 
@@ -298,6 +392,7 @@ export namespace app {
 	        this.name = source["name"];
 	        this.rootPath = source["rootPath"];
 	        this.gitRoot = source["gitRoot"];
+	        this.pinned = source["pinned"];
 	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
 	    }
@@ -336,6 +431,20 @@ export namespace app {
 
 export namespace config {
 
+	export class SandboxConfig {
+	    Enabled: boolean;
+	    Mode: string;
+
+	    static createFrom(source: any = {}) {
+	        return new SandboxConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Enabled = source["Enabled"];
+	        this.Mode = source["Mode"];
+	    }
+	}
 	export class AgentConfig {
 	    MaxTurns: number;
 	    ContextBudgetChars: number;
@@ -343,6 +452,7 @@ export namespace config {
 	    ShellTimeoutSec: number;
 	    ParallelTools: boolean;
 	    LLMSchedule: boolean;
+	    Sandbox: SandboxConfig;
 
 	    static createFrom(source: any = {}) {
 	        return new AgentConfig(source);
@@ -356,7 +466,26 @@ export namespace config {
 	        this.ShellTimeoutSec = source["ShellTimeoutSec"];
 	        this.ParallelTools = source["ParallelTools"];
 	        this.LLMSchedule = source["LLMSchedule"];
+	        this.Sandbox = this.convertValues(source["Sandbox"], SandboxConfig);
 	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class PermissionConfig {
 	    Read: string;
@@ -430,6 +559,7 @@ export namespace config {
 	    Agent: AgentConfig;
 	    Provider: ProviderConfig;
 	    Permissions: PermissionConfig;
+	    MCPServers: mcp.Definition[];
 
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -442,6 +572,7 @@ export namespace config {
 	        this.Agent = this.convertValues(source["Agent"], AgentConfig);
 	        this.Provider = this.convertValues(source["Provider"], ProviderConfig);
 	        this.Permissions = this.convertValues(source["Permissions"], PermissionConfig);
+	        this.MCPServers = this.convertValues(source["MCPServers"], mcp.Definition);
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -462,6 +593,7 @@ export namespace config {
 		    return a;
 		}
 	}
+
 
 
 
@@ -543,6 +675,37 @@ export namespace git {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace mcp {
+
+	export class Definition {
+	    id: string;
+	    name: string;
+	    transport: string;
+	    url?: string;
+	    command?: string;
+	    args?: string[];
+	    env?: string[];
+	    enabled: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new Definition(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.transport = source["transport"];
+	        this.url = source["url"];
+	        this.command = source["command"];
+	        this.args = source["args"];
+	        this.env = source["env"];
+	        this.enabled = source["enabled"];
+	    }
 	}
 
 }
